@@ -35,21 +35,64 @@ This repo implements the station side of that design.
 
 ---
 
-## Repository layout (high level)
+## Repository layout
 
 > The exact internal structure may evolve; these are the intended boundaries.
 
 ```
 .
-├── assets/                 # Icons, images, UI assets
-├── config/                 # App configuration (ports, endpoints, UI presets)
-├── docs/                   # Documentation
-│   └── design/
-│       └── Architecture.md # System & station architecture
-├── src/                    # Application source code
-├── tests/                  # Unit/integration tests
-├── CMakeLists.txt          # CMake build entry
-└── .gitignore
+├── 📁 assets/                 # Icons, images, UI assets
+│   ├── 📁 icons/
+│   │   └── example.svg
+│   └── 📁 themes/
+│       └── dark.qss
+├── 📁 config/                 # App configuration (ports, endpoints, UI presets)
+│   └── settings.json
+├── 📁 docs/                   # Documentation
+│   ├── 📁 design/
+│   │   ├── Architecture.md    # System & station architecture
+│   │   ├── checklist.md
+│   │   └── PROTOCOL.md
+│   └── 📁 tmp/
+│       └── test.txt
+├── 📁 src/                    # Application source code
+│   ├── 📁 app/
+│   │   ├── CMakeLists.txt
+│   │   └── main.cpp
+│   ├── 📁 comms/
+│   │   ├── CommandClient.cpp
+│   │   ├── CommandClient.h
+│   │   ├── TelemetryClient.cpp
+│   │   ├── TelemetryClient.h
+│   │   ├── VideoStreamClient.cpp
+│   │   └── VideoStreamClient.h
+│   ├── 📁 core/
+│   │   ├── AppConfig.cpp
+│   │   ├── AppConfig.h
+│   │   ├── AppController.cpp
+│   │   └── AppController.h
+│   ├── 📁 models/
+│   │   ├── GcsCommand.h
+│   │   ├── MissionState.h
+│   │   ├── PerceptionTarget.h
+│   │   ├── StreamMode.h
+│   │   └── TelemetryFrame.h
+│   ├── 📁 ui/
+│   │   ├── MainWindow.cpp
+│   │   ├── MainWindow.h
+│   │   └── MainWindow.ui
+│   └── 📁 utils/
+│       ├── JsonUtils.cpp
+│       └── JsonUtils.h
+├── 📁 tests/                  # Unit/integration tests
+│   ├── CMakeLists.txt
+│   ├── test_command_serialize.cpp
+│   └── test_telemetry_parse.cpp
+├── .clang-format
+├── .gitignore
+├── CMakeLists.txt             # CMake build entry
+├── LICENSE
+└── README.md
 ```
 
 ---
