@@ -75,6 +75,9 @@ This repo implements the station side of that design.
 │   │   ├── Architecture.md    # System & station architecture
 │   │   ├── checklist.md
 │   │   └── PROTOCOL.md
+|   ├── 📁 images/
+│   │   ├── ulak-gcs-banner.png  # Banner Of the Project
+│   │   └── ...
 │   └── 📁 spec/
 │       ├── ecosystem.md # Answers the question: Which parts of the GCS can be customizable?
 │       ├── exception-handling.md # Definitions of w/e/c messages, default actions and profile system
