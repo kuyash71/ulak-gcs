@@ -35,22 +35,22 @@ Rules:
 
 ## Phase 0 - Scope Lock And Consistency
 
-- [ ] **Gate**: `README.md`, `docs/design/Architecture.md`, and `docs/design/PROTOCOL.md` describe the same MVP boundaries and command/safety model.
-- [ ] **Docs**: `docs/design/PROTOCOL.md` is no longer empty and defines:
-  - [ ] message categories (`telemetry/*`, `mission/state`, `perception/output`, `safety/events`, `station/commands`)
-  - [ ] envelope fields (`schema_version`, `timestamp`, `source`, `correlation_id`)
-  - [ ] command ACK/REJECT/TIMEOUT semantics
-  - [ ] error codes and retry/idempotency rules
-- [ ] **Docs**: ADR/spec files are populated (not placeholders) for:
-  - [ ] profiles and policy mapping
-  - [ ] panic button fixed behavior
-  - [ ] exception handling contract
-- [ ] **Build**: config baselines exist and contain valid JSON content:
-  - [ ] `config/settings.json`
-  - [ ] `config/gcs_defaults.json`
-  - [ ] `config/profiles/default.json`
-  - [ ] `config/profiles/safe.json`
-  - [ ] `config/profiles/aggressive.json`
+- [x] **Gate**: `README.md`, `docs/design/Architecture.md`, and `docs/design/PROTOCOL.md` describe the same MVP boundaries and command/safety model.
+- [x] **Docs**: `docs/design/PROTOCOL.md` is no longer empty and defines:
+  - [x] message categories (`telemetry/*`, `mission/state`, `perception/output`, `safety/events`, `station/commands`)
+  - [x] envelope fields (`schema_version`, `timestamp`, `source`, `correlation_id`)
+  - [x] command ACK/REJECT/TIMEOUT semantics
+  - [x] error codes and retry/idempotency rules
+- [x] **Docs**: ADR/spec files are populated (not placeholders) for:
+  - [x] profiles and policy mapping
+  - [x] panic button fixed behavior
+  - [x] exception handling contract
+- [x] **Build**: config baselines exist and contain valid JSON content:
+  - [x] `config/settings.json`
+  - [x] `config/gcs_defaults.json`
+  - [x] `config/profiles/default.json`
+  - [x] `config/profiles/safe.json`
+  - [x] `config/profiles/aggressive.json`
 
 ---
 
@@ -227,6 +227,17 @@ These items must not block MVP closure and should live in a post-MVP backlog:
 
 Record proof for each completed phase:
 
+- 2026-02-10 protocol update: `docs/design/PROTOCOL.md` populated with MVP protocol contract.
+- 2026-02-10 consistency update: telemetry model aligned across `README.md`, `docs/design/Architecture.md`, and `docs/design/PROTOCOL.md` (XYZ base schema + vehicle/simulator variants + configurable simulator coordinate transform).
+- 2026-02-10 ADR/spec update:
+  - `docs/adr/002-gcs-profiles.md` populated (profiles and policy mapping decision).
+  - `docs/adr/003-panic-button-system.md` populated (panic fixed RTL decision).
+  - `docs/spec/exception-handling.md` populated (exception handling contract).
+  - `docs/spec/panic-button.md` and `docs/spec/ecosystem.md` populated for operational and customization boundaries.
+- 2026-02-10 config baseline update:
+  - `config/settings.json`, `config/gcs_defaults.json`, `config/profiles/default.json`, `config/profiles/safe.json`, `config/profiles/aggressive.json` populated and validated via `jq`.
+- Audit basis:
+  - Root `CMakeLists.txt`, `src/`, and `tests/` implementation files are empty placeholders.
 - Build commands and outputs:
 - Test suite outputs:
 - End-to-end scenario evidence:

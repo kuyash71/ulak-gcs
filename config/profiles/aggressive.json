@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0.0",
+  "profile_id": "aggressive",
+  "display_name": "Aggressive",
+  "protected": false,
+  "constraints": {
+    "panic_override_allowed": false
+  },
+  "policy": {
+    "severity_levels": [
+      "WARN",
+      "ERROR",
+      "CRITICAL"
+    ],
+    "defaults": {
+      "unknown_event": {
+        "severity": "WARN",
+        "action": "NOTIFY_ONLY"
+      }
+    },
+    "mappings": [
+      {
+        "event_code": "TELEMETRY_LOSS",
+        "severity": "ERROR",
+        "action": "REQUEST_CONFIRMATION",
+        "timeout_action": "HOLD_POSITION"
+      },
+      {
+        "event_code": "CC_LINK_LOSS",
+        "severity": "WARN",
+        "action": "NOTIFY_ONLY"
+      },
+      {
+        "event_code": "STREAM_LOSS",
+        "severity": "WARN",
+        "action": "NOTIFY_ONLY"
+      },
+      {
+        "event_code": "VISION_LOST",
+        "severity": "WARN",
+        "action": "NOTIFY_ONLY"
+      },
+      {
+        "event_code": "LOW_BATTERY",
+        "severity": "ERROR",
+        "action": "REQUEST_CONFIRMATION",
+        "timeout_action": "PANIC_RTL"
+      },
+      {
+        "event_code": "INVALID_OPERATOR_ACTION",
+        "severity": "ERROR",
+        "action": "REJECT_COMMAND"
+      }
+    ]
+  },
+  "timers": {
+    "error_confirm_window_sec": 8
+  },
+  "limits": {
+    "command_rate_limit_per_sec": 8
+  }
+}

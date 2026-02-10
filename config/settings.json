@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0.0",
+  "instance_name": "ulak-gcs-local",
+  "active_profile": "default",
+  "telemetry": {
+    "vehicle_endpoint": {
+      "transport": "udp",
+      "host": "127.0.0.1",
+      "port": 14550
+    },
+    "simulator_endpoint": {
+      "transport": "udp",
+      "host": "127.0.0.1",
+      "port": 14560
+    },
+    "health_interval_ms": 500
+  },
+  "companion": {
+    "endpoint": {
+      "transport": "tcp",
+      "host": "127.0.0.1",
+      "port": 5760
+    },
+    "command_endpoint": {
+      "transport": "tcp",
+      "host": "127.0.0.1",
+      "port": 5770
+    }
+  },
+  "stream": {
+    "mode": "OFF",
+    "compressed_live": {
+      "codec": "H264",
+      "fps": 20,
+      "bitrate_kbps": 2500
+    },
+    "raw_debug_enabled": false
+  },
+  "simulation": {
+    "active_transform_id": "gazebo_world_to_ardupilot_ned_v1",
+    "coordinate_transform": {
+      "enabled": true,
+      "source_frame_id": "GAZEBO_WORLD",
+      "target_frame_id": "ARDUPILOT_LOCAL_NED",
+      "axis_map": {
+        "x": "y",
+        "y": "x",
+        "z": "-z"
+      },
+      "translation_m": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "rotation_deg": {
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": 0.0
+      },
+      "scale": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 1.0
+      }
+    }
+  },
+  "command_lifecycle": {
+    "ack_timeout_ms": 2000,
+    "exec_timeout_ms": 10000,
+    "retry": {
+      "max_attempts": 3,
+      "backoff_ms": [
+        500,
+        1000,
+        2000
+      ]
+    }
+  },
+  "safety": {
+    "error_confirm_window_sec": 5,
+    "panic_requires_guard": true,
+    "panic_lockout_ms": 1000
+  },
+  "logging": {
+    "directory": "logs",
+    "ndjson_enabled": true,
+    "session_rotation": "daily"
+  }
+}

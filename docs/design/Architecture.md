@@ -168,6 +168,7 @@ Station accepts a limited set of operator commands:
 
 - start / stop mission,
 - parameter override (e.g., INFINITE_LOOP_COUNT),
+- simulation coordinate transform update (simulation mode only),
 - operator intervention / safe termination.
 
 Command Gateway responsibilities:
@@ -315,6 +316,23 @@ The station is easiest to maintain when messages are versioned and typed.
 ### 7.2 Minimal payload (examples)
 
 > Examples are conceptual; the concrete schema should match the system implementation.
+
+**Telemetry (base + derived model)**
+
+```json
+{
+  "telemetry_type": "vehicle",
+  "frame_id": "LOCAL_ENU",
+  "position_m": { "x": 12.4, "y": -3.1, "z": 24.8 },
+  "velocity_mps": { "x": 1.2, "y": 0.0, "z": -0.3 },
+  "attitude_deg": { "roll": 1.1, "pitch": -0.4, "yaw": 87.2 }
+}
+```
+
+Notes:
+
+- `telemetry/vehicle` MAY add geodetic fields (`lat_deg`, `lon_deg`, `alt_m`) for mapping/interoperability.
+- `telemetry/simulator` uses the same base XYZ contract and should pass through a configurable Gazebo-to-ArduPilot coordinate transformer before being shown in UI/state.
 
 **Mission state**
 

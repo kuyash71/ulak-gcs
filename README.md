@@ -138,6 +138,9 @@ This repo implements the station side of that design.
 - Panic Button => RTL (Cannot be Changed via Customization)
 - Exception Levels: WARN / ERROR / CRITICAL (Levels of 3, fully customizable)
 - Policy-First approach on project
+- Canonical telemetry contract is XYZ-based for both vehicle and simulator paths
+- Telemetry variants are named `telemetry/vehicle` and `telemetry/simulator`
+- Simulation telemetry supports configurable Gazebo-to-ArduPilot coordinate transform
 - Default Profile is non-removable via GUI
 - Panic Button behavior is fixed to RTL and independent of profiles
 - Not tightly coupled to the ArduPilot UI ecosystem
@@ -200,6 +203,7 @@ Configuration files live under `config/` (and/or a user-level config directory d
 Typical parameters include:
 
 - telemetry endpoints (serial/UDP/TCP)
+- simulation coordinate transform (source frame, target frame, axis mapping, offsets)
 - mission/perception endpoints
 - stream mode (none / outputs / compressed / raw)
 - logging directory

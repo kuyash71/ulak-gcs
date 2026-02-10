@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0.0",
+  "default_profile": "default",
+  "available_profiles": [
+    "default",
+    "safe",
+    "aggressive"
+  ],
+  "immutable_contract": {
+    "panic_command": "PANIC_RTL",
+    "severity_levels": [
+      "WARN",
+      "ERROR",
+      "CRITICAL"
+    ],
+    "telemetry_categories": [
+      "telemetry/vehicle",
+      "telemetry/simulator",
+      "telemetry/health"
+    ]
+  },
+  "stream_modes": [
+    "OFF",
+    "OUTPUTS_ONLY",
+    "COMPRESSED_LIVE",
+    "RAW_DEBUG"
+  ],
+  "command_contract": {
+    "ack_timeout_ms": 2000,
+    "exec_timeout_ms": 10000,
+    "ack_is_completion": false
+  },
+  "simulation_defaults": {
+    "transform_id": "gazebo_world_to_ardupilot_ned_v1",
+    "source_frame_id": "GAZEBO_WORLD",
+    "target_frame_id": "ARDUPILOT_LOCAL_NED",
+    "axis_map": {
+      "x": "y",
+      "y": "x",
+      "z": "-z"
+    },
+    "translation_m": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0
+    },
+    "rotation_deg": {
+      "roll": 0.0,
+      "pitch": 0.0,
+      "yaw": 0.0
+    },
+    "scale": {
+      "x": 1.0,
+      "y": 1.0,
+      "z": 1.0
+    }
+  }
+}
