@@ -53,7 +53,8 @@ The system design uses a hybrid communication model:
 flowchart LR
   OP[Operator]
 
-  subgraph STATION[ULAK GCS (Station)]    UI[UI Layer]
+  subgraph STATION["ULAK GCS (Station)"]
+    UI[UI Layer]
     APP[Application Core]
     BUS[Event Bus]
     LOG[Logger & Recorder]
@@ -63,15 +64,15 @@ flowchart LR
     MIF[Mission/Perception Adapter]
     STR[Stream Manager]
     CMD[Command Gateway]
-    SAFE[Safety Layer (UI + Constraints)]
+    SAFE["Safety Layer (UI + Constraints)"]
   end
 
-  subgraph FC[Flight Controller]
+  subgraph FC["Flight Controller"]
     FC_TEL[Telemetry Stream]
   end
 
-  subgraph CC[Companion Computer]
-    CC_MIS[Mission State (FSM)]
+  subgraph CC["Companion Computer"]
+    CC_MIS["Mission State (FSM)"]
     CC_PER[Perception Output]
     CC_STR[Video Stream]
     CC_SAFE[Safety Events]
@@ -97,6 +98,7 @@ flowchart LR
 
   CMD --> FC
   CMD --> CC
+
 ```
 
 ### 2.2 Architectural principles
