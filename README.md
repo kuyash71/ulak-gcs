@@ -6,7 +6,7 @@
 
 **ULAK GCS** is a Ground Control Station (GCS) application originally developed for the SAÜRO rotary-wing UAV project.
 After seeing the potential of the station-side architecture, the GCS was separated into this standalone repository to
-serve a broader **ArduPilot**-oriented ecosystem.
+**ULAK GCS** is a next-generation Ground Control Station (GCS) designed to extend the _ArduPilot ecosystem_ with integrated mission visibility, perception observability, and runtime tuning, while preserving flight-controller authority and safety.
 
 ULAK GCS focuses on an operator-friendly UI to **monitor telemetry**, **observe mission/perception outputs**, and **issue controlled commands**,
 with a plugin-friendly structure planned to support extensibility.
@@ -48,7 +48,7 @@ This repo implements the station side of that design.
 
 ## Repository layout
 
-> The exact internal structure may evolve; these are the intended boundaries.
+> The exact internal structure may evoleve; these are the intended boundaries.
 
 ```
 .
