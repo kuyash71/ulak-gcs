@@ -56,14 +56,14 @@ Rules:
 
 ## Phase 1 - Build System And App Bootstrap
 
-- [ ] **Build**: `CMakeLists.txt` defines project, app target, and test target(s).
-- [ ] **Build**: `src/app/main.cpp` boots app, handles invalid config, and exits cleanly.
-- [ ] **Build**: minimum executable is produced (`sauro_station` or platform equivalent).
-- [ ] **Test**: clean-clone configure/build works:
-  - [ ] `cmake -S . -B build`
-  - [ ] `cmake --build build`
-- [ ] **Test**: app start smoke test documented (startup + clean shutdown).
-- [ ] **Gate**: build/test instructions in `README.md` run exactly as written.
+- [x] **Build**: `CMakeLists.txt` defines project, app target, and test target(s).
+- [x] **Build**: `src/app/main.cpp` boots app, handles invalid config, and exits cleanly.
+- [x] **Build**: minimum executable is produced (`sauro_station` or platform equivalent).
+- [x] **Test**: clean-clone configure/build works:
+  - [x] `cmake -S . -B build`
+  - [x] `cmake --build build`
+- [x] **Test**: app start smoke test documented (startup + clean shutdown).
+- [x] **Gate**: build/test instructions in `README.md` run exactly as written.
 
 ---
 
@@ -236,10 +236,19 @@ Record proof for each completed phase:
   - `docs/spec/panic-button.md` and `docs/spec/ecosystem.md` populated for operational and customization boundaries.
 - 2026-02-10 config baseline update:
   - `config/settings.json`, `config/gcs_defaults.json`, `config/profiles/default.json`, `config/profiles/safe.json`, `config/profiles/aggressive.json` populated and validated via `jq`.
-- Audit basis:
-  - Root `CMakeLists.txt`, `src/`, and `tests/` implementation files are empty placeholders.
+- 2026-02-10 audit basis (historical):
+  - Root `CMakeLists.txt`, `src/`, and `tests/` implementation files were empty placeholders.
+- 2026-02-15 Phase 1 implementation:
+  - `CMakeLists.txt` defines project/toolchain defaults, app target wiring, and test target wiring.
+  - `src/app/main.cpp` and `src/app/BootstrapConfig.*` provide bootstrap startup, config validation, invalid-config handling, and clean shutdown.
+  - `tests/CMakeLists.txt` and `tests/test_bootstrap_config.cpp` provide bootstrap validation tests and startup smoke tests via `ctest`.
+  - `README.md` build/test/run steps updated to match Phase 1 command contract and smoke test documentation.
 - Build commands and outputs:
+  - `cmake -S . -B build` -> configure/generate completed successfully.
+  - `cmake --build build` -> built `sauro_station_bootstrap`, `sauro_station`, `sauro_station_tests`.
 - Test suite outputs:
+  - `ctest --test-dir build --output-on-failure` -> 3/3 tests passed (`bootstrap_config_validation`, `app_startup_smoke`, `app_rejects_missing_config`).
+  - `./build/sauro_station` -> startup message + clean shutdown verified.
 - End-to-end scenario evidence:
 - Example NDJSON log snippets:
 - UI screenshots or short recordings:

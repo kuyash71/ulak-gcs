@@ -167,9 +167,8 @@ This repo implements the station side of that design.
 
 ```bash
 # from repository root
-mkdir -p build
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
+cmake -S . -B build
+cmake --build build
 ```
 
 ### Windows (Visual Studio)
@@ -183,6 +182,14 @@ cmake --build build --config Release
 
 ---
 
+## Test
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+---
+
 ## Run
 
 ```bash
@@ -192,7 +199,13 @@ cmake --build build --config Release
 or on Windows:
 
 ```powershell
-.build\Release\sauro_station.exe
+.\build\Release\sauro_station.exe
+```
+
+### Startup smoke test
+
+```bash
+./build/sauro_station --validate-only --config config/settings.json
 ```
 
 ---
