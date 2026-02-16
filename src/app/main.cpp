@@ -1,5 +1,6 @@
 #include "BootstrapConfig.h"
 
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -13,6 +14,7 @@ constexpr int kExitConfigError = 78;
 
 struct CliOptions {
   std::string config_path = "config/settings.json";
+  bool config_explicit = false;
   bool validate_only = false;
   bool show_help = false;
 };
@@ -49,6 +51,7 @@ bool ParseArgs(int argc, char** argv, CliOptions* options, std::string* error) {
         return false;
       }
       options->config_path = argv[++i];
+      options->config_explicit = true;
       continue;
     }
 
@@ -57,6 +60,32 @@ bool ParseArgs(int argc, char** argv, CliOptions* options, std::string* error) {
   }
 
   return true;
+}
+
+// Attempts to resolve a relative config path by walking parent directories.
+std::filesystem::path ResolveConfigPath(const std::filesystem::path& requested_path) {
+  if (!requested_path.is_relative()) {
+    return requested_path;
+  }
+
+  std::error_code ec;
+  std::filesystem::path current = std::filesystem::current_path(ec);
+  if (ec) {
+    return requested_path;
+  }
+
+  for (int depth = 0; depth < 6; ++depth) {
+    const auto candidate = current / requested_path;
+    if (std::filesystem::exists(candidate, ec) && !ec) {
+      return candidate;
+    }
+    if (current == current.root_path()) {
+      break;
+    }
+    current = current.parent_path();
+  }
+
+  return requested_path;
 }
 
 }  // namespace
@@ -76,7 +105,13 @@ int main(int argc, char** argv) {
   }
 
   // Validate config before proceeding with any app startup.
-  const auto validation = ulak::bootstrap::ValidateConfigFile(options.config_path);
+  std::filesystem::path config_path = options.config_path;
+  if (!options.config_explicit) {
+    // Resolve default config path even when the app is started from build/.
+    config_path = ResolveConfigPath(config_path);
+  }
+
+  const auto validation = ulak::bootstrap::ValidateConfigFile(config_path);
   if (!validation.ok) {
     std::cerr << "[sauro_station] Config validation failed ("
               << ulak::bootstrap::ToString(validation.error)
