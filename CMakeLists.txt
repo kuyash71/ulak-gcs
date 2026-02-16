@@ -15,6 +15,11 @@ option(ULAK_GCS_BUILD_TESTS "Build ULAK GCS tests" ON)
 # App entry point.
 add_subdirectory(src/app)
 
+# Shared utilities and core modules.
+add_subdirectory(src/utils)
+add_subdirectory(src/models)
+add_subdirectory(src/core)
+
 if(ULAK_GCS_BUILD_TESTS)
   # CTest is used for Phase-1 smoke coverage.
   include(CTest)

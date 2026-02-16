@@ -69,18 +69,18 @@ Rules:
 
 ## Phase 2 - Core Contracts: Config, Models, Serialization
 
-- [ ] **Build**: `AppConfig` and `ConfigLoader` load and validate all required files.
-- [ ] **Build**: `JsonUtils` provides parse/validate/error-reporting utilities used by core modules.
-- [ ] **Build**: models are defined with stable fields and version awareness:
-  - [ ] `TelemetryFrame`
-  - [ ] `MissionState`
-  - [ ] `PerceptionTarget`
-  - [ ] `GcsCommand`
-  - [ ] `StreamMode`
-- [ ] **Build**: command serialization/parsing is deterministic and protocol-compliant.
-- [ ] **Test**: config parse tests cover missing file, invalid JSON, invalid schema/value.
-- [ ] **Test**: command serialization tests cover malformed/missing/extra fields.
-- [ ] **Gate**: config and profile schema_version mismatches result in deterministic fallback behavior as documented (no silent acceptance).
+- [x] **Build**: `AppConfig` and `ConfigLoader` load and validate all required files.
+- [x] **Build**: `JsonUtils` provides parse/validate/error-reporting utilities used by core modules.
+- [x] **Build**: models are defined with stable fields and version awareness:
+  - [x] `TelemetryFrame`
+  - [x] `MissionState`
+  - [x] `PerceptionTarget`
+  - [x] `GcsCommand`
+  - [x] `StreamMode`
+- [x] **Build**: command serialization/parsing is deterministic and protocol-compliant.
+- [x] **Test**: config parse tests cover missing file, invalid JSON, invalid schema/value.
+- [x] **Test**: command serialization tests cover malformed/missing/extra fields.
+- [x] **Gate**: config and profile schema_version mismatches result in deterministic fallback behavior as documented (no silent acceptance).
 
 ---
 
@@ -243,12 +243,26 @@ Record proof for each completed phase:
   - `src/app/main.cpp` and `src/app/BootstrapConfig.*` provide bootstrap startup, config validation, invalid-config handling, and clean shutdown.
   - `tests/CMakeLists.txt` and `tests/test_bootstrap_config.cpp` provide bootstrap validation tests and startup smoke tests via `ctest`.
   - `README.md` build/test/run steps updated to match Phase 1 command contract and smoke test documentation.
+- 2026-02-16 Phase 2 skeleton:
+  - `src/core/AppConfig.*` defines config data model skeleton.
+  - `src/core/ConfigLoader.*` validates required settings and schema version.
+  - `src/utils/JsonUtils.*` provides minimal JSON parser and access helpers.
+  - `tests/test_config_loader.cpp` adds missing/invalid/schema/value coverage for config parsing.
+- 2026-02-16 Phase 2 completion:
+  - `src/models/*.h` define Telemetry/Mission/Perception/Command/Stream models with schema awareness.
+  - `src/models/GcsCommand.*` + `src/utils/JsonUtils.*` implement deterministic command serialization/parsing.
+  - `src/core/ProfileLoader.*` enforces profile schema checks with deterministic fallback to default profile.
+  - `tests/test_command_serialize.cpp` covers malformed/missing/extra fields for command requests.
 - Build commands and outputs:
   - `cmake -S . -B build` -> configure/generate completed successfully.
   - `cmake --build build` -> built `sauro_station_bootstrap`, `sauro_station`, `sauro_station_tests`.
 - Test suite outputs:
   - `ctest --test-dir build --output-on-failure` -> 3/3 tests passed (`bootstrap_config_validation`, `app_startup_smoke`, `app_rejects_missing_config`).
   - `./build/sauro_station` -> startup message + clean shutdown verified.
+  - `ctest --test-dir build --output-on-failure` -> 4/4 tests passed (adds `config_loader_validation`).
+  - `./build/sauro_station_tests` -> bootstrap config tests passed when run from build directory.
+  - `./build/sauro_station_config_tests` -> config loader tests passed when run from build directory.
+  - `ctest --test-dir build --output-on-failure` -> 5/5 tests passed (adds `command_serialization_validation`).
 - End-to-end scenario evidence:
 - Example NDJSON log snippets:
 - UI screenshots or short recordings:

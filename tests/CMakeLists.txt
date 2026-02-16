@@ -3,6 +3,16 @@ add_executable(sauro_station_tests
   test_bootstrap_config.cpp
 )
 target_link_libraries(sauro_station_tests PRIVATE sauro_station_bootstrap)
+
+add_executable(sauro_station_config_tests
+  test_config_loader.cpp
+)
+target_link_libraries(sauro_station_config_tests PRIVATE sauro_station_core)
+
+add_executable(sauro_station_command_tests
+  test_command_serialize.cpp
+)
+target_link_libraries(sauro_station_command_tests PRIVATE sauro_station_models)
 target_compile_features(sauro_station_tests PRIVATE cxx_std_17)
 
 # Config validation tests.
@@ -27,4 +37,20 @@ add_test(
 )
 set_tests_properties(app_rejects_missing_config PROPERTIES
   WILL_FAIL TRUE
+)
+
+add_test(
+  NAME config_loader_validation
+  COMMAND $<TARGET_FILE:sauro_station_config_tests>
+)
+set_tests_properties(config_loader_validation PROPERTIES
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+)
+
+add_test(
+  NAME command_serialization_validation
+  COMMAND $<TARGET_FILE:sauro_station_command_tests>
+)
+set_tests_properties(command_serialization_validation PROPERTIES
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
 )

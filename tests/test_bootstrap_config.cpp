@@ -7,6 +7,28 @@
 
 namespace {
 
+std::filesystem::path ResolveRepoRelative(const std::filesystem::path& relative_path) {
+  if (!relative_path.is_relative()) {
+    return relative_path;
+  }
+  std::error_code ec;
+  std::filesystem::path current = std::filesystem::current_path(ec);
+  if (ec) {
+    return relative_path;
+  }
+  for (int depth = 0; depth < 6; ++depth) {
+    const auto candidate = current / relative_path;
+    if (std::filesystem::exists(candidate, ec) && !ec) {
+      return candidate;
+    }
+    if (current == current.root_path()) {
+      break;
+    }
+    current = current.parent_path();
+  }
+  return relative_path;
+}
+
 // Minimal assertion helper for a lightweight test binary.
 bool Expect(bool condition, const std::string& failure_message) {
   if (!condition) {
@@ -28,7 +50,8 @@ bool WriteFile(const std::filesystem::path& path, const std::string& content) {
 
 // Uses the real config file to ensure baseline correctness.
 bool TestValidConfig() {
-  const auto result = ulak::bootstrap::ValidateConfigFile("config/settings.json");
+  const auto settings_path = ResolveRepoRelative("config/settings.json");
+  const auto result = ulak::bootstrap::ValidateConfigFile(settings_path);
   return Expect(result.ok, "Expected config/settings.json to validate") &&
          Expect(!result.schema_version.empty(), "Expected non-empty schema_version") &&
          Expect(!result.active_profile.empty(), "Expected non-empty active_profile");
@@ -36,7 +59,8 @@ bool TestValidConfig() {
 
 // Verifies missing file detection.
 bool TestMissingConfigFile() {
-  const auto result = ulak::bootstrap::ValidateConfigFile("config/not_found.json");
+  const auto missing_path = ResolveRepoRelative("config/not_found.json");
+  const auto result = ulak::bootstrap::ValidateConfigFile(missing_path);
   return Expect(!result.ok, "Expected missing config to fail validation") &&
          Expect(result.error == ulak::bootstrap::ValidationError::kMissingFile,
                 "Expected kMissingFile for missing config");
