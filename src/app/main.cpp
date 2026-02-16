@@ -6,6 +6,7 @@
 
 namespace {
 
+// Exit codes aligned with common UNIX conventions (sysexits-style).
 constexpr int kExitOk = 0;
 constexpr int kExitInvalidUsage = 64;
 constexpr int kExitConfigError = 78;
@@ -16,6 +17,7 @@ struct CliOptions {
   bool show_help = false;
 };
 
+// Simple CLI help output.
 void PrintHelp(const char* executable_name) {
   std::cout << "ULAK GCS bootstrap executable\n"
             << "Usage: " << executable_name
@@ -26,6 +28,7 @@ void PrintHelp(const char* executable_name) {
             << "  --help            Show this help text.\n";
 }
 
+// Parses CLI flags; unknown arguments are treated as errors.
 bool ParseArgs(int argc, char** argv, CliOptions* options, std::string* error) {
   for (int i = 1; i < argc; ++i) {
     const std::string_view arg(argv[i]);
@@ -72,6 +75,7 @@ int main(int argc, char** argv) {
     return kExitOk;
   }
 
+  // Validate config before proceeding with any app startup.
   const auto validation = ulak::bootstrap::ValidateConfigFile(options.config_path);
   if (!validation.ok) {
     std::cerr << "[sauro_station] Config validation failed ("
@@ -84,6 +88,7 @@ int main(int argc, char** argv) {
             << "schema_version=" << validation.schema_version
             << ", active_profile=" << validation.active_profile << '\n';
 
+  // Validate-only mode exits without starting the UI/event loop.
   if (options.validate_only) {
     std::cout << "[sauro_station] validate-only mode complete. Clean shutdown.\n";
     return kExitOk;

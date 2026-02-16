@@ -11,6 +11,7 @@
 namespace ulak::bootstrap {
 namespace {
 
+// Lightweight JSON parser for bootstrap validation (no external deps).
 enum class JsonType {
   kObject,
   kArray,
@@ -20,15 +21,18 @@ enum class JsonType {
   kNull,
 };
 
+// Minimal per-field summary used for root-level checks.
 struct JsonValueSummary {
   JsonType type{JsonType::kNull};
   std::string string_value;
 };
 
+// Strict JSON parser that only keeps root object fields.
 class JsonParser {
  public:
   explicit JsonParser(std::string_view input) : input_(input) {}
 
+  // Parses a single JSON object at the root and collects root fields.
   bool ParseRootObject(std::unordered_map<std::string, JsonValueSummary>* root_fields) {
     SkipWhitespace();
     if (!ParseObject(/*depth=*/0, root_fields)) {
@@ -49,6 +53,7 @@ class JsonParser {
  private:
   static constexpr int kMaxJsonDepth = 128;
 
+  // Parses an object. Root-level field summaries are stored when provided.
   bool ParseObject(int depth, std::unordered_map<std::string, JsonValueSummary>* root_fields) {
     if (depth > kMaxJsonDepth) {
       return Fail("JSON nesting exceeds supported depth");
@@ -132,6 +137,7 @@ class JsonParser {
     }
   }
 
+  // Parses a JSON value and populates summary with type (string captured only).
   bool ParseValue(int depth, JsonValueSummary* summary) {
     if (AtEnd()) {
       return Fail("Unexpected end of input while parsing value");
@@ -186,6 +192,7 @@ class JsonParser {
     return Fail("Unexpected token while parsing value");
   }
 
+  // Parses a JSON string (unicode escapes are accepted but simplified).
   bool ParseString(std::string* output) {
     if (!ConsumeChar('"')) {
       return Fail("Expected '\"' to start string");
@@ -247,6 +254,7 @@ class JsonParser {
     return Fail("Unterminated string");
   }
 
+  // Validates a \uXXXX escape without full UTF-8 decoding.
   bool ParseUnicodeEscape() {
     for (int i = 0; i < 4; ++i) {
       if (AtEnd() || !IsHexDigit(PeekChar())) {
@@ -257,6 +265,7 @@ class JsonParser {
     return true;
   }
 
+  // Validates JSON number syntax.
   bool ParseNumber() {
     ConsumeChar('-');
 
@@ -299,6 +308,7 @@ class JsonParser {
     return true;
   }
 
+  // Consumes an exact literal token.
   bool ConsumeLiteral(std::string_view literal) {
     if (position_ + literal.size() > input_.size()) {
       return false;
@@ -331,6 +341,7 @@ class JsonParser {
     return true;
   }
 
+  // Records the first error and returns false.
   bool Fail(const std::string& message) {
     if (error_message_.empty()) {
       error_message_ = message + " at byte " + std::to_string(position_);
@@ -363,6 +374,7 @@ class JsonParser {
   std::string error_message_;
 };
 
+// Helper to standardize error result creation.
 ValidationResult MakeError(ValidationError error, std::string message) {
   ValidationResult result;
   result.ok = false;
@@ -371,6 +383,7 @@ ValidationResult MakeError(ValidationError error, std::string message) {
   return result;
 }
 
+// Checks for a required object-type field.
 bool IsObjectField(const std::unordered_map<std::string, JsonValueSummary>& fields,
                    const std::string& key) {
   const auto it = fields.find(key);
@@ -384,6 +397,7 @@ bool IsObjectField(const std::unordered_map<std::string, JsonValueSummary>& fiel
 
 ValidationResult ValidateConfigFile(const std::filesystem::path& config_path) {
   std::error_code ec;
+  // File presence and basic path sanity.
   if (!std::filesystem::exists(config_path, ec)) {
     return MakeError(ValidationError::kMissingFile,
                      "Config file does not exist: " + config_path.string());
@@ -420,12 +434,14 @@ ValidationResult ValidateConfigFile(const std::filesystem::path& config_path) {
     return MakeError(ValidationError::kInvalidJson, "Config file is empty");
   }
 
+  // Parse the JSON and capture root-level fields for validation.
   std::unordered_map<std::string, JsonValueSummary> root_fields;
   JsonParser parser(content);
   if (!parser.ParseRootObject(&root_fields)) {
     return MakeError(ValidationError::kInvalidJson, parser.error_message());
   }
 
+  // Required core fields.
   auto schema_it = root_fields.find("schema_version");
   if (schema_it == root_fields.end()) {
     return MakeError(ValidationError::kMissingRequiredField,
@@ -467,6 +483,7 @@ ValidationResult ValidateConfigFile(const std::filesystem::path& config_path) {
                      "Required object field 'stream' is missing");
   }
 
+  // Populate success metadata for logs.
   ValidationResult result;
   result.ok = true;
   result.error = ValidationError::kNone;

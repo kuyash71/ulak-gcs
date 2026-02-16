@@ -7,6 +7,7 @@
 
 namespace {
 
+// Minimal assertion helper for a lightweight test binary.
 bool Expect(bool condition, const std::string& failure_message) {
   if (!condition) {
     std::cerr << "[test] " << failure_message << '\n';
@@ -15,6 +16,7 @@ bool Expect(bool condition, const std::string& failure_message) {
   return true;
 }
 
+// Writes a file used by negative JSON tests.
 bool WriteFile(const std::filesystem::path& path, const std::string& content) {
   std::ofstream output(path);
   if (!output.good()) {
@@ -24,6 +26,7 @@ bool WriteFile(const std::filesystem::path& path, const std::string& content) {
   return output.good();
 }
 
+// Uses the real config file to ensure baseline correctness.
 bool TestValidConfig() {
   const auto result = ulak::bootstrap::ValidateConfigFile("config/settings.json");
   return Expect(result.ok, "Expected config/settings.json to validate") &&
@@ -31,6 +34,7 @@ bool TestValidConfig() {
          Expect(!result.active_profile.empty(), "Expected non-empty active_profile");
 }
 
+// Verifies missing file detection.
 bool TestMissingConfigFile() {
   const auto result = ulak::bootstrap::ValidateConfigFile("config/not_found.json");
   return Expect(!result.ok, "Expected missing config to fail validation") &&
@@ -38,6 +42,7 @@ bool TestMissingConfigFile() {
                 "Expected kMissingFile for missing config");
 }
 
+// Verifies JSON parse failure handling.
 bool TestInvalidJson(const std::filesystem::path& temp_dir) {
   const auto invalid_path = temp_dir / "invalid.json";
   if (!WriteFile(invalid_path, R"({"schema_version":"1.0.0", "active_profile": })")) {
@@ -50,6 +55,7 @@ bool TestInvalidJson(const std::filesystem::path& temp_dir) {
                 "Expected kInvalidJson for malformed JSON");
 }
 
+// Verifies required fields must exist.
 bool TestMissingRequiredField(const std::filesystem::path& temp_dir) {
   const auto invalid_path = temp_dir / "missing_active_profile.json";
   const std::string content = R"({
@@ -68,6 +74,7 @@ bool TestMissingRequiredField(const std::filesystem::path& temp_dir) {
                 "Expected kMissingRequiredField for missing active_profile");
 }
 
+// Verifies type checking on required fields.
 bool TestInvalidFieldType(const std::filesystem::path& temp_dir) {
   const auto invalid_path = temp_dir / "invalid_type.json";
   const std::string content = R"({
@@ -91,6 +98,7 @@ bool TestInvalidFieldType(const std::filesystem::path& temp_dir) {
 
 int main() {
   std::error_code ec;
+  // Use a temp dir to avoid polluting the repo.
   const auto temp_dir = std::filesystem::temp_directory_path(ec) / "ulak_gcs_bootstrap_tests";
   if (ec) {
     std::cerr << "[test] Failed to access temporary directory: " << ec.message() << '\n';
