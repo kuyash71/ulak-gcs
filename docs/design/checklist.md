@@ -86,16 +86,16 @@ Rules:
 
 ## Phase 3 - Policy-First Safety Core
 
-- [ ] **Build**: `ProfileManager` loads default/safe/aggressive profiles and supports switching.
-- [ ] **Build**: default profile cannot be deleted from UI workflow.
-- [ ] **Build**: `ExceptionClassifier` maps `event -> severity -> action` deterministically.
-- [ ] **Build**: ERROR confirm window implemented (default countdown 5s, configurable).
-- [ ] **Build**: timeout path for unconfirmed ERROR escalates to configured safe action (RTL by default).
-- [ ] **Build**: `PanicManager` always emits RTL command, independent of active profile.
-- [ ] **Build**: panic/event safety actions are always audit-logged.
-- [ ] **Test**: panic is RTL under all profiles.
-- [ ] **Test**: countdown behavior (5 to 0), cancel/confirm/timeout branches.
-- [ ] **Gate**: policy behavior matches documented profile mappings exactly.
+- [x] **Build**: `ProfileManager` loads default/safe/aggressive profiles and supports switching.
+- [x] **Build**: default profile cannot be deleted from UI workflow.
+- [x] **Build**: `ExceptionClassifier` maps `event -> severity -> action` deterministically.
+- [x] **Build**: ERROR confirm window implemented (default countdown 5s, configurable).
+- [x] **Build**: timeout path for unconfirmed ERROR escalates to configured safe action (RTL by default).
+- [x] **Build**: `PanicManager` always emits RTL command, independent of active profile.
+- [x] **Build**: panic/event safety actions are always audit-logged.
+- [x] **Test**: panic is RTL under all profiles.
+- [x] **Test**: countdown behavior (5 to 0), cancel/confirm/timeout branches.
+- [x] **Gate**: policy behavior matches documented profile mappings exactly.
 
 ---
 
@@ -253,6 +253,13 @@ Record proof for each completed phase:
   - `src/models/GcsCommand.*` + `src/utils/JsonUtils.*` implement deterministic command serialization/parsing.
   - `src/core/ProfileLoader.*` enforces profile schema checks with deterministic fallback to default profile.
   - `tests/test_command_serialize.cpp` covers malformed/missing/extra fields for command requests.
+- 2026-02-21 Phase 3 implementation:
+  - `src/core/ProfileManager.*` loads `default/safe/aggressive` profile contracts, supports profile switching, and blocks protected/default profile deletion in UI workflow paths.
+  - `src/core/ExceptionClassifier.*` implements deterministic `event -> severity -> action` mapping, profile-based fallback handling, configurable ERROR confirmation countdown, and timeout escalation actions.
+  - `src/core/PanicManager.*` always emits `PANIC_RTL` command requests independent of active profile and records lifecycle audit entries.
+  - `tests/profile_data_parse.cpp` validates profile mappings and fallback behavior against documented policy tables.
+  - `tests/error_counter.cpp` validates countdown behavior for 5->0 progression, confirm, cancel, and timeout branches.
+  - `tests/panic_button.cpp` validates panic behavior remains `PANIC_RTL` under all profiles with audit coverage.
 - Build commands and outputs:
   - `cmake -S . -B build` -> configure/generate completed successfully.
   - `cmake --build build` -> built `sauro_station_bootstrap`, `sauro_station`, `sauro_station_tests`.
@@ -263,6 +270,7 @@ Record proof for each completed phase:
   - `./build/sauro_station_tests` -> bootstrap config tests passed when run from build directory.
   - `./build/sauro_station_config_tests` -> config loader tests passed when run from build directory.
   - `ctest --test-dir build --output-on-failure` -> 5/5 tests passed (adds `command_serialization_validation`).
+  - `ctest --test-dir build --output-on-failure` -> 8/8 tests passed (adds `profile_policy_validation`, `error_countdown_validation`, `panic_manager_validation`).
 - End-to-end scenario evidence:
 - Example NDJSON log snippets:
 - UI screenshots or short recordings:
