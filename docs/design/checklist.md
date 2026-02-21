@@ -253,6 +253,10 @@ Record proof for each completed phase:
   - `src/models/GcsCommand.*` + `src/utils/JsonUtils.*` implement deterministic command serialization/parsing.
   - `src/core/ProfileLoader.*` enforces profile schema checks with deterministic fallback to default profile.
   - `tests/test_command_serialize.cpp` covers malformed/missing/extra fields for command requests.
+- 2026-02-21 Phase 2 protocol compliance hardening:
+  - `src/models/GcsCommand.cpp` now validates command envelope `timestamp` as RFC3339 UTC (`YYYY-MM-DDTHH:MM:SSZ`) and restricts `source` to `station|flight_controller|companion_computer`.
+  - `tests/test_command_serialize.cpp` adds negative coverage for invalid `timestamp` and invalid `source` values.
+  - Verification rerun: `cmake --build build` and `ctest --test-dir build --output-on-failure` completed with 8/8 passing tests.
 - 2026-02-21 Phase 3 implementation:
   - `src/core/ProfileManager.*` loads `default/safe/aggressive` profile contracts, supports profile switching, and blocks protected/default profile deletion in UI workflow paths.
   - `src/core/ExceptionClassifier.*` implements deterministic `event -> severity -> action` mapping, profile-based fallback handling, configurable ERROR confirmation countdown, and timeout escalation actions.

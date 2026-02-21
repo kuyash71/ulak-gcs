@@ -85,6 +85,48 @@ bool TestInvalidCategory() {
                 "Expected kUnsupportedCategory for non-request category");
 }
 
+bool TestInvalidTimestampFormat() {
+  const std::string json = R"({
+    "schema_version": "1.0.0",
+    "category": "station/commands/request",
+    "timestamp": "2026-02-10 19:00:00",
+    "source": "station",
+    "correlation_id": "abc-123",
+    "payload": {
+      "command": "STOP_MISSION",
+      "target": "companion_computer",
+      "params": {}
+    }
+  })";
+
+  ulak::models::CommandRequest request;
+  const auto result = ulak::models::ParseCommandRequest(json, &request);
+  return Expect(!result.ok, "Expected invalid timestamp format to fail") &&
+         Expect(result.error == ulak::models::CommandParseError::kInvalidValue,
+                "Expected kInvalidValue for invalid timestamp format");
+}
+
+bool TestInvalidSource() {
+  const std::string json = R"({
+    "schema_version": "1.0.0",
+    "category": "station/commands/request",
+    "timestamp": "2026-02-10T19:00:00Z",
+    "source": "random_node",
+    "correlation_id": "abc-123",
+    "payload": {
+      "command": "STOP_MISSION",
+      "target": "companion_computer",
+      "params": {}
+    }
+  })";
+
+  ulak::models::CommandRequest request;
+  const auto result = ulak::models::ParseCommandRequest(json, &request);
+  return Expect(!result.ok, "Expected invalid source enum to fail") &&
+         Expect(result.error == ulak::models::CommandParseError::kInvalidValue,
+                "Expected kInvalidValue for invalid source");
+}
+
 bool TestExtraFields() {
   const std::string json = R"({
     "schema_version": "1.0.0",
@@ -139,6 +181,8 @@ int main() {
                   TestMissingField() &&
                   TestInvalidJson() &&
                   TestInvalidCategory() &&
+                  TestInvalidTimestampFormat() &&
+                  TestInvalidSource() &&
                   TestExtraFields() &&
                   TestDeterministicSerialization();
 
