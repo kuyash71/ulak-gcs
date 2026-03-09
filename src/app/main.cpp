@@ -121,7 +121,8 @@ int main(int argc, char** argv) {
 
   std::cout << "[sauro_station] Bootstrap OK. "
             << "schema_version=" << validation.schema_version
-            << ", active_profile=" << validation.active_profile << '\n';
+            << ", active_profile=" << validation.active_profile
+            << ", deployment_mode=" << validation.deployment_mode << '\n';
 
   // Validate-only mode exits without starting the UI/event loop.
   if (options.validate_only) {

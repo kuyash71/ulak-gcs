@@ -470,17 +470,30 @@ ValidationResult ValidateConfigFile(const std::filesystem::path& config_path) {
                      "Field 'active_profile' must not be empty");
   }
 
-  if (!IsObjectField(root_fields, "telemetry")) {
+  // deployment_mode: must be "simulation" or "real".
+  auto mode_it = root_fields.find("deployment_mode");
+  if (mode_it == root_fields.end()) {
     return MakeError(ValidationError::kMissingRequiredField,
-                     "Required object field 'telemetry' is missing");
+                     "Required field 'deployment_mode' is missing");
   }
-  if (!IsObjectField(root_fields, "companion")) {
-    return MakeError(ValidationError::kMissingRequiredField,
-                     "Required object field 'companion' is missing");
+  if (mode_it->second.type != JsonType::kString) {
+    return MakeError(ValidationError::kInvalidFieldType,
+                     "Field 'deployment_mode' must be a string");
   }
-  if (!IsObjectField(root_fields, "stream")) {
+  const std::string& deployment_mode = mode_it->second.string_value;
+  if (deployment_mode != "simulation" && deployment_mode != "real") {
+    return MakeError(ValidationError::kInvalidFieldValue,
+                     "Field 'deployment_mode' must be 'simulation' or 'real'");
+  }
+
+  // ros2 and network must be objects (both are always present in settings.json).
+  if (!IsObjectField(root_fields, "ros2")) {
     return MakeError(ValidationError::kMissingRequiredField,
-                     "Required object field 'stream' is missing");
+                     "Required object field 'ros2' is missing");
+  }
+  if (!IsObjectField(root_fields, "network")) {
+    return MakeError(ValidationError::kMissingRequiredField,
+                     "Required object field 'network' is missing");
   }
 
   // Populate success metadata for logs.
@@ -490,6 +503,7 @@ ValidationResult ValidateConfigFile(const std::filesystem::path& config_path) {
   result.message = "Config validated successfully";
   result.schema_version = schema_it->second.string_value;
   result.active_profile = profile_it->second.string_value;
+  result.deployment_mode = deployment_mode;
   return result;
 }
 

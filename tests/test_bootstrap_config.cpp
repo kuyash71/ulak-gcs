@@ -82,11 +82,12 @@ bool TestInvalidJson(const std::filesystem::path& temp_dir) {
 // Verifies required fields must exist.
 bool TestMissingRequiredField(const std::filesystem::path& temp_dir) {
   const auto invalid_path = temp_dir / "missing_active_profile.json";
+  // active_profile intentionally omitted; all other required fields present.
   const std::string content = R"({
     "schema_version": "1.0.0",
-    "telemetry": {},
-    "companion": {},
-    "stream": {}
+    "deployment_mode": "simulation",
+    "ros2": {},
+    "network": {}
   })";
   if (!WriteFile(invalid_path, content)) {
     return Expect(false, "Failed to write missing_active_profile.json");
@@ -101,12 +102,13 @@ bool TestMissingRequiredField(const std::filesystem::path& temp_dir) {
 // Verifies type checking on required fields.
 bool TestInvalidFieldType(const std::filesystem::path& temp_dir) {
   const auto invalid_path = temp_dir / "invalid_type.json";
+  // active_profile is a number, not a string.
   const std::string content = R"({
     "schema_version": "1.0.0",
     "active_profile": 42,
-    "telemetry": {},
-    "companion": {},
-    "stream": {}
+    "deployment_mode": "simulation",
+    "ros2": {},
+    "network": {}
   })";
   if (!WriteFile(invalid_path, content)) {
     return Expect(false, "Failed to write invalid_type.json");
@@ -116,6 +118,26 @@ bool TestInvalidFieldType(const std::filesystem::path& temp_dir) {
   return Expect(!result.ok, "Expected invalid field type to fail validation") &&
          Expect(result.error == ulak::bootstrap::ValidationError::kInvalidFieldType,
                 "Expected kInvalidFieldType for active_profile number");
+}
+
+// Verifies that an unknown deployment_mode value is rejected.
+bool TestInvalidDeploymentMode(const std::filesystem::path& temp_dir) {
+  const auto invalid_path = temp_dir / "invalid_deployment_mode.json";
+  const std::string content = R"({
+    "schema_version": "1.0.0",
+    "active_profile": "default",
+    "deployment_mode": "flying",
+    "ros2": {},
+    "network": {}
+  })";
+  if (!WriteFile(invalid_path, content)) {
+    return Expect(false, "Failed to write invalid_deployment_mode.json");
+  }
+
+  const auto result = ulak::bootstrap::ValidateConfigFile(invalid_path);
+  return Expect(!result.ok, "Expected unknown deployment_mode to fail validation") &&
+         Expect(result.error == ulak::bootstrap::ValidationError::kInvalidFieldValue,
+                "Expected kInvalidFieldValue for unknown deployment_mode");
 }
 
 }  // namespace
@@ -138,7 +160,8 @@ int main() {
                   TestMissingConfigFile() &&
                   TestInvalidJson(temp_dir) &&
                   TestMissingRequiredField(temp_dir) &&
-                  TestInvalidFieldType(temp_dir);
+                  TestInvalidFieldType(temp_dir) &&
+                  TestInvalidDeploymentMode(temp_dir);
 
   std::filesystem::remove_all(temp_dir, ec);
   if (ec) {

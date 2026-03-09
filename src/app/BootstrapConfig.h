@@ -22,6 +22,7 @@ struct ValidationResult {
   std::string message;
   std::string schema_version;
   std::string active_profile;
+  std::string deployment_mode;  // "simulation" or "real"; populated on success.
 };
 
 // Validate config file presence, JSON sanity, and required fields.

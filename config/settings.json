@@ -2,40 +2,51 @@
   "schema_version": "1.0.0",
   "instance_name": "ulak-gcs-local",
   "active_profile": "default",
-  "telemetry": {
-    "vehicle_endpoint": {
-      "transport": "udp",
+
+  "deployment_mode": "simulation",
+
+  "ros2": {
+    "bridge": {
       "host": "127.0.0.1",
-      "port": 14550
+      "port": 9090
     },
-    "simulator_endpoint": {
-      "transport": "udp",
-      "host": "127.0.0.1",
-      "port": 14560
-    },
-    "health_interval_ms": 500
+    "topics": {
+      "telemetry":        "/mavros/local_position/pose",
+      "vehicle_state":    "/mavros/state",
+      "mission_state":    "/mission/state",
+      "perception_output":"/perception/output",
+      "safety_events":    "/safety/events",
+      "camera":           "/camera/image_raw",
+      "commands":         "/ulak_gcs/commands"
+    }
   },
-  "companion": {
-    "endpoint": {
+
+  "network": {
+    "telemetry_endpoint": {
+      "transport": "serial",
+      "port": "COM3",
+      "baud": 57600
+    },
+    "companion_endpoint": {
       "transport": "tcp",
-      "host": "127.0.0.1",
+      "host": "192.168.1.100",
       "port": 5760
     },
     "command_endpoint": {
       "transport": "tcp",
-      "host": "127.0.0.1",
+      "host": "192.168.1.100",
       "port": 5770
-    }
-  },
-  "stream": {
-    "mode": "OFF",
-    "compressed_live": {
+    },
+    "stream": {
+      "mode": "COMPRESSED_LIVE",
+      "host": "192.168.1.100",
+      "port": 8554,
       "codec": "H264",
       "fps": 20,
       "bitrate_kbps": 2500
-    },
-    "raw_debug_enabled": false
+    }
   },
+
   "simulation": {
     "active_transform_id": "gazebo_world_to_ardupilot_ned_v1",
     "coordinate_transform": {
@@ -64,23 +75,22 @@
       }
     }
   },
+
   "command_lifecycle": {
     "ack_timeout_ms": 2000,
     "exec_timeout_ms": 10000,
     "retry": {
       "max_attempts": 3,
-      "backoff_ms": [
-        500,
-        1000,
-        2000
-      ]
+      "backoff_ms": [500, 1000, 2000]
     }
   },
+
   "safety": {
     "error_confirm_window_sec": 5,
     "panic_requires_guard": true,
     "panic_lockout_ms": 1000
   },
+
   "logging": {
     "directory": "logs",
     "ndjson_enabled": true,

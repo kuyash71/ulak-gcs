@@ -36,12 +36,64 @@ Those run on:
 - **Flight Controller** (e.g., Pixhawk / ArduPilot): critical flight stabilization and modes.
 - **Companion Computer** (e.g., Raspberry Pi): mission logic, perception, and optional streaming services.
 
-### 1.3 Communication model (hybrid)
+### 1.3 Deployment modes
 
-The system design uses a hybrid communication model:
+The station operates in one of two mutually exclusive deployment modes, selected via `deployment_mode` in `settings.json`. The mode determines which transport backend all adapters use at startup. The Application Core and UI are completely agnostic to the active mode.
 
-- **Telemetry**: Flight Controller → Station (direct, reliable)
-- **Mission/perception/camera**: Companion Computer → Station (operator visibility)
+| Mode | `deployment_mode` | Transport Layer | Use Case |
+|------|-------------------|-----------------|----------|
+| **Simulation** | `"simulation"` | ROS2 (rosbridge WebSocket) | ArduPilot SITL + Gazebo, all data via ROS2 topics |
+| **Real Drone** | `"real"` | Network / Serial (raw) | Pixhawk MAVLink + Raspberry Pi over Wi-Fi, no ROS2 |
+
+#### 1.3.1 Simulation mode
+
+In simulation mode **all data channels** (telemetry, mission state, perception, safety events, camera) are consumed via ROS2 topics through a rosbridge WebSocket connection. There is no direct serial or TCP data connection.
+
+```
+[ArduPilot SITL + Gazebo] ──ROS2 topics──> [rosbridge WS] ──> [ULAK GCS]
+```
+
+- The rosbridge WebSocket endpoint is configured in `settings.json` under `ros2.bridge`.
+- Every data channel (telemetry, mission, perception, camera) maps to a named ROS2 topic configurable in `settings.json` under `ros2.topics`.
+- In Windows/WSL2 setups: SITL and rosbridge run inside WSL2. The `ros2.bridge.host` MUST be the WSL2 NIC IP (e.g. `172.x.x.x`), **not** `127.0.0.1`.
+- **ROS2 topic names are user-configurable.** The station UI exposes a topic mapping panel (simulation mode only) so operators can inspect and adjust topic names without editing JSON files.
+
+#### 1.3.2 Real drone mode
+
+In real drone mode **all data channels** use direct network or serial connections. There is **no ROS2 dependency** — no rosbridge, no topic subscription.
+
+```
+[Pixhawk FC] ──serial/USB (MAVLink)──> [ULAK GCS]
+[Raspberry Pi CC] ──Wi-Fi TCP──> [ULAK GCS]
+[RPi camera] ──Wi-Fi H.264 stream──> [ULAK GCS]
+```
+
+- **Telemetry**: MAVLink over serial (USB cable to Pixhawk). Port is `COMx` on Windows, `/dev/ttyUSBx` on Linux. Configured in `settings.json` under `network.telemetry_endpoint`.
+- **Mission state / Perception / Safety events**: JSON over TCP from Raspberry Pi companion computer. Configured under `network.companion_endpoint`.
+- **Camera**: H.264 compressed stream from Raspberry Pi over Wi-Fi. Configured under `network.stream`.
+- **Commands**: JSON over TCP to Raspberry Pi (`network.command_endpoint`); MAVLink commands routed through FC for flight actions.
+
+### 1.4 Transport abstraction principle
+
+Each adapter (Telemetry, Mission/Perception, Stream Manager, Command Gateway) exposes a **stable internal interface** to the Application Core. At startup, the `deployment_mode` value determines which backend implementation is instantiated behind that interface:
+
+```
+Application Core
+      │
+      ├── TelemetryAdapter ──[simulation]──> ROS2Backend(ros2.topics.telemetry)
+      │                    ──[real]──────> MAVLinkSerialBackend(network.telemetry_endpoint)
+      │
+      ├── MissionAdapter ───[simulation]──> ROS2Backend(ros2.topics.mission_state, ...)
+      │                    ──[real]──────> TcpJsonBackend(network.companion_endpoint)
+      │
+      ├── StreamManager ───[simulation]──> ROS2Backend(ros2.topics.camera)
+      │                   ──[real]──────> H264TcpBackend(network.stream)
+      │
+      └── CommandGateway ──[simulation]──> ROS2Backend(ros2.topics.commands)
+                          ──[real]──────> TcpJsonBackend(network.command_endpoint)
+```
+
+This ensures that swapping deployment modes requires **only a config change**, not code changes. Internal data models (`TelemetryFrame`, `MissionState`, `PerceptionTarget`, etc.) are identical in both modes.
 
 ---
 
@@ -120,8 +172,9 @@ flowchart LR
   - mission state view (FSM),
   - perception outputs (targets/alignment/confidence),
   - streaming view (if enabled),
-  - safety events/timeline.
-- Provides operator actions: connect/disconnect, start/stop mission, parameter override, safe safe termination (e.g., abort / RTL via Panic Button).
+  - safety events/timeline,
+  - **ROS2 topic mapping panel** (visible in `simulation` mode only): lists all configured topic names, allows the operator to inspect and edit them without touching JSON files.
+- Provides operator actions: connect/disconnect, start/stop mission, parameter override, safe termination (e.g., abort / RTL via Panic Button).
 
 ### 3.2 Application Core
 
@@ -136,31 +189,34 @@ flowchart LR
 
 ### 3.3 Telemetry Adapter
 
-- Connects to FC telemetry source(s) (serial/UDP/TCP depending on configuration).
-- Parses and normalizes into a stable internal model.
+Exposes a single `TelemetryFrame` stream to the Application Core. Backend is selected by `deployment_mode`:
+
+- **simulation**: subscribes to `ros2.topics.telemetry` (e.g. `/mavros/local_position/pose`) and `ros2.topics.vehicle_state` via rosbridge.
+- **real**: connects to Pixhawk via MAVLink serial (`network.telemetry_endpoint`). Port is `COMx` on Windows, `/dev/ttyUSBx` on Linux.
+
+In both cases, raw data is normalized into the internal `TelemetryFrame` model before being published.
 
 ### 3.4 Mission/Perception Adapter
 
-- Consumes the data types described for the station:
-  - mission state (active state + progress),
-  - perception outputs (target/alignment/confidence),
-  - system health warnings and failsafe events.
-- Publishes them to the Event Bus.
+Exposes typed `MissionState`, `PerceptionTarget`, and `SafetyEvent` streams. Backend selected by `deployment_mode`:
+
+- **simulation**: subscribes to `ros2.topics.mission_state`, `ros2.topics.perception_output`, `ros2.topics.safety_events` via rosbridge.
+- **real**: receives JSON over TCP from Raspberry Pi companion computer (`network.companion_endpoint`).
+
+Publishes normalized events to the Event Bus regardless of backend.
 
 ### 3.5 Stream Manager
 
-The design supports selectable **streaming modes** to balance performance vs observability:
+Delivers camera frames to the UI layer. Backend is selected by `deployment_mode`:
 
-- **OFF**: no stream delivered to the station
-- **OUTPUTS_ONLY**: send processed detection results only
-- **COMPRESSED_LIVE**: H.264/H.265 compressed live stream with configurable FPS/bitrate
-- **RAW_DEBUG** (optional): raw stream for debugging in lab environments
+- **simulation**: subscribes to `ros2.topics.camera` (e.g. `/camera/image_raw`) via rosbridge. Frames arrive as base64-encoded raw image data and are decoded locally. Stream `mode` setting is ignored in this context.
+- **real**: receives H.264/H.265 compressed stream from Raspberry Pi over Wi-Fi (`network.stream`). The operator selects stream mode:
+  - **OFF**: no stream
+  - **OUTPUTS_ONLY**: detection overlays only (no raw frames)
+  - **COMPRESSED_LIVE**: full H.264/H.265 stream with configurable FPS/bitrate
+  - **RAW_DEBUG**: uncompressed frames for lab use
 
-Responsibilities:
-
-- negotiates mode with companion computer,
-- receives/decodes stream (if enabled),
-- exposes a frame queue to UI (with drop strategy under load).
+In both modes, the Stream Manager exposes a frame queue to the UI with a drop strategy under load. The UI must never block on frame delivery.
 
 ### 3.6 Command Gateway
 
@@ -193,26 +249,40 @@ Command Gateway responsibilities:
 
 ### 4.1 Telemetry flow
 
-1. Flight controller sends telemetry frames to Station.
-2. Telemetry Adapter parses frames and publishes `TelemetryUpdate` events.
-3. Application Core updates the unified state.
-4. UI renders latest snapshot and indicators.
+**Simulation:**
+1. SITL publishes pose/state to ROS2 topics.
+2. Telemetry Adapter (ROS2 backend) receives frames via rosbridge.
+3. Frames normalized to `TelemetryFrame` → `TelemetryUpdate` event published.
+4. Application Core updates unified state; UI renders.
+
+**Real drone:**
+1. Pixhawk sends MAVLink frames over serial/USB.
+2. Telemetry Adapter (MAVLink backend) parses frames.
+3. Same `TelemetryFrame` normalization → same event path.
 
 ### 4.2 Mission & perception flow
 
-1. Companion computer emits:
-   - mission state updates (FSM),
-   - perception outputs,
-   - safety events.
-2. Mission/Perception Adapter parses them and publishes typed events.
-3. Application Core updates state and pushes to UI and Logger.
+**Simulation:**
+1. Companion sim publishes to ROS2 topics (`/mission/state`, `/perception/output`, `/safety/events`).
+2. Mission/Perception Adapter (ROS2 backend) receives via rosbridge.
+3. Normalized events published to Event Bus.
+
+**Real drone:**
+1. Raspberry Pi sends JSON payloads over TCP.
+2. Mission/Perception Adapter (TCP backend) parses and normalizes.
+3. Same event path to Application Core, UI, Logger.
 
 ### 4.3 Camera/stream flow
 
-1. Station selects a streaming mode.
-2. Stream Manager requests the mode change to companion computer.
-3. If enabled, companion computer sends compressed stream.
-4. Stream Manager decodes frames and hands them to UI with backpressure/dropping.
+**Simulation:**
+1. Gazebo publishes raw frames to `/camera/image_raw` ROS2 topic.
+2. Stream Manager (ROS2 backend) receives base64 frames via rosbridge, decodes locally.
+3. Frame queue handed to UI.
+
+**Real drone:**
+1. Raspberry Pi encodes and streams H.264 over Wi-Fi.
+2. Stream Manager (H.264 backend) decodes and feeds frame queue.
+3. UI renders with drop strategy under load.
 
 ---
 

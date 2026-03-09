@@ -12,7 +12,7 @@ It is the wire-level contract for message categories, envelope fields, command l
 
 ## 2. Scope and assumptions
 
-- Transport is implementation-specific (serial/UDP/TCP/MQTT/WebSocket). The payload contract remains the same.
+- Transport is deployment-specific (see Section 2.1). The payload contract remains the same.
 - Message format is JSON (UTF-8).
 - Timestamp format is RFC3339 UTC (example: `2026-02-10T18:45:30Z`).
 - The architecture is hybrid:
@@ -22,6 +22,37 @@ It is the wire-level contract for message categories, envelope fields, command l
 - Telemetry payloads use a shared XYZ-based base schema for both vehicle and simulator feeds.
 - For `vehicle` telemetry, geodetic fields (`lat_deg`, `lon_deg`, `alt_m`) are optional extensions and not the canonical position contract.
 - For simulation telemetry, a configurable coordinate transformer is required because Gazebo and ArduPilot local XYZ conventions are not identical.
+
+### 2.1 Deployment modes and transport selection
+
+The station operates in one of two modes set by `deployment_mode` in `settings.json`. The mode determines the transport for **all** data channels. The JSON protocol described in this document applies to the `real` mode only. In `simulation` mode, ROS2 message types replace the JSON envelope (see Section 11).
+
+#### Mode: `simulation`
+
+All data flows via ROS2 topics through a rosbridge WebSocket connection. There is no direct serial or TCP connection to any component.
+
+| Channel | Transport | Config key |
+|---------|-----------|------------|
+| Telemetry | ROS2 topic (rosbridge WS) | `ros2.topics.telemetry` |
+| Vehicle state | ROS2 topic | `ros2.topics.vehicle_state` |
+| Mission state | ROS2 topic | `ros2.topics.mission_state` |
+| Perception output | ROS2 topic | `ros2.topics.perception_output` |
+| Safety events | ROS2 topic | `ros2.topics.safety_events` |
+| Camera | ROS2 topic | `ros2.topics.camera` |
+| Commands | ROS2 topic | `ros2.topics.commands` |
+
+rosbridge endpoint: `ros2.bridge.host` + `ros2.bridge.port`. On Windows/WSL2 the host MUST be the WSL2 NIC IP.
+
+#### Mode: `real`
+
+All data flows over direct network or serial connections. No ROS2 dependency.
+
+| Channel | Transport | Config key |
+|---------|-----------|------------|
+| Telemetry (FC) | MAVLink serial | `network.telemetry_endpoint` |
+| Mission / Perception / Safety | TCP JSON | `network.companion_endpoint` |
+| Commands | TCP JSON | `network.command_endpoint` |
+| Camera stream | H.264 TCP/UDP | `network.stream` |
 
 ## 3. Protocol versioning
 
@@ -443,6 +474,57 @@ Retry policy:
   }
 }
 ```
+
+---
+
+## 11. Simulation mode — ROS2 transport
+
+When `deployment_mode` is `"simulation"`, this JSON protocol does **not** apply to incoming data. Instead, all adapters connect to rosbridge (rosbridge_suite WebSocket server) and subscribe to ROS2 topics. The JSON envelope defined in Sections 3–10 is used only for outgoing commands on the `ros2.topics.commands` topic.
+
+### 11.1 rosbridge connection
+
+```json
+"ros2": {
+  "bridge": {
+    "host": "127.0.0.1",
+    "port": 9090
+  }
+}
+```
+
+- Protocol: WebSocket, rosbridge v2.
+- On Windows/WSL2: `host` MUST be the WSL2 NIC IP (e.g. `172.x.x.x`), not `127.0.0.1`.
+
+### 11.2 Topic mapping
+
+All topic names are user-configurable in `settings.json` under `ros2.topics`. The station UI exposes a topic mapping panel in simulation mode for inspecting and editing them at runtime.
+
+Default topic mapping:
+
+| Internal channel | Default topic | ROS2 message type |
+|-----------------|---------------|-------------------|
+| Telemetry | `/mavros/local_position/pose` | `geometry_msgs/PoseStamped` |
+| Vehicle state | `/mavros/state` | `mavros_msgs/State` |
+| Mission state | `/mission/state` | `std_msgs/String` (JSON payload) |
+| Perception output | `/perception/output` | `std_msgs/String` (JSON payload) |
+| Safety events | `/safety/events` | `std_msgs/String` (JSON payload) |
+| Camera | `/camera/image_raw` | `sensor_msgs/Image` |
+| Commands (out) | `/ulak_gcs/commands` | `std_msgs/String` (JSON envelope) |
+
+### 11.3 Data normalization
+
+Each adapter is responsible for converting ROS2 message types into internal models:
+
+- `geometry_msgs/PoseStamped` → `TelemetryFrame`
+- `mavros_msgs/State` → vehicle mode / arm fields of `TelemetryFrame`
+- `std_msgs/String` (JSON) → `MissionState` / `PerceptionTarget` / `SafetyEvent`
+- `sensor_msgs/Image` → decoded frame buffer for Stream Manager
+
+The Application Core and UI receive the same internal model regardless of deployment mode.
+
+### 11.4 Coordinate transform
+
+In simulation mode the coordinate transform (`simulation.coordinate_transform`) MUST be enabled to align Gazebo world coordinates with the ArduPilot LOCAL_NED frame before populating `TelemetryFrame.position_m`.
 
 ---
 

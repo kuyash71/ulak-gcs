@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmake -S . -B build_vs -G \"Visual Studio 17 2022\" -DULAK_GCS_BUILD_TESTS=ON -DBUILD_TESTING=ON)",
+      "Read(//c/Program Files \\(x86\\)/**)",
+      "Read(//c/msys64/mingw64/**)",
+      "Read(//c/ProgramData/mingw64/**)",
+      "Bash(pacman -Ss gcc)"
+    ]
+  }
+}

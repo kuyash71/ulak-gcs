@@ -19,11 +19,19 @@
       "telemetry/health"
     ]
   },
+  "deployment_modes": [
+    "simulation",
+    "real"
+  ],
   "stream_modes": [
     "OFF",
     "OUTPUTS_ONLY",
     "COMPRESSED_LIVE",
     "RAW_DEBUG"
+  ],
+  "transport_types": [
+    "tcp",
+    "serial"
   ],
   "command_contract": {
     "ack_timeout_ms": 2000,

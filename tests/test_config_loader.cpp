@@ -55,16 +55,25 @@ std::string MinimalValidConfigJson(const std::string& schema_version,
       << "  \"schema_version\": \"" << schema_version << "\",\n"
       << "  \"instance_name\": \"test-instance\",\n"
       << "  \"active_profile\": \"default\",\n"
-      << "  \"telemetry\": {\n"
-      << "    \"vehicle_endpoint\": { \"transport\": \"udp\", \"host\": \"127.0.0.1\", \"port\": 14550 },\n"
-      << "    \"simulator_endpoint\": { \"transport\": \"udp\", \"host\": \"127.0.0.1\", \"port\": 14560 },\n"
-      << "    \"health_interval_ms\": 500\n"
+      << "  \"deployment_mode\": \"simulation\",\n"
+      << "  \"ros2\": {\n"
+      << "    \"bridge\": { \"host\": \"127.0.0.1\", \"port\": 9090 },\n"
+      << "    \"topics\": {\n"
+      << "      \"telemetry\": \"/test/tel\",\n"
+      << "      \"vehicle_state\": \"/test/state\",\n"
+      << "      \"mission_state\": \"/test/mission\",\n"
+      << "      \"perception_output\": \"/test/perception\",\n"
+      << "      \"safety_events\": \"/test/safety\",\n"
+      << "      \"camera\": \"/test/camera\",\n"
+      << "      \"commands\": \"/test/commands\"\n"
+      << "    }\n"
       << "  },\n"
-      << "  \"companion\": {\n"
-      << "    \"endpoint\": { \"transport\": \"tcp\", \"host\": \"127.0.0.1\", \"port\": 5760 },\n"
-      << "    \"command_endpoint\": { \"transport\": \"tcp\", \"host\": \"127.0.0.1\", \"port\": 5770 }\n"
-      << "  },\n"
-      << "  \"stream\": { \"mode\": \"" << stream_mode << "\" }\n"
+      << "  \"network\": {\n"
+      << "    \"telemetry_endpoint\": { \"transport\": \"serial\", \"port\": \"COM3\", \"baud\": 57600 },\n"
+      << "    \"companion_endpoint\": { \"transport\": \"tcp\", \"host\": \"127.0.0.1\", \"port\": 5760 },\n"
+      << "    \"command_endpoint\": { \"transport\": \"tcp\", \"host\": \"127.0.0.1\", \"port\": 5770 },\n"
+      << "    \"stream\": { \"mode\": \"" << stream_mode << "\" }\n"
+      << "  }\n"
       << "}\n";
   return out.str();
 }
@@ -75,7 +84,16 @@ bool TestValidConfig() {
   const auto result = ulak::core::LoadConfigFile(settings_path, &config);
   return Expect(result.ok, "Expected config/settings.json to load") &&
          Expect(config.schema_version == "1.0.0", "Expected schema_version=1.0.0") &&
-         Expect(!config.active_profile.empty(), "Expected active_profile to be set");
+         Expect(!config.active_profile.empty(), "Expected active_profile to be set") &&
+         Expect(config.deployment_mode == ulak::core::DeploymentMode::kSimulation,
+                "Expected deployment_mode=kSimulation for default settings.json") &&
+         Expect(!config.ros2.bridge.host.empty(), "Expected ros2.bridge.host to be set") &&
+         Expect(!config.ros2.topics.telemetry.empty(),
+                "Expected ros2.topics.telemetry to be set") &&
+         Expect(!config.network.telemetry_endpoint.port.empty(),
+                "Expected network.telemetry_endpoint.port to be set") &&
+         Expect(!config.network.companion_endpoint.host.empty(),
+                "Expected network.companion_endpoint.host to be set");
 }
 
 bool TestMissingConfigFile() {
@@ -128,15 +146,18 @@ bool TestInvalidValue(const std::filesystem::path& temp_dir) {
 
 bool TestMissingField(const std::filesystem::path& temp_dir) {
   const auto path = temp_dir / "missing_field.json";
+  // "ros2" block intentionally omitted to trigger kMissingField.
   const std::string content = R"({
     "schema_version": "1.0.0",
     "instance_name": "test-instance",
     "active_profile": "default",
-    "companion": {
-      "endpoint": { "transport": "tcp", "host": "127.0.0.1", "port": 5760 },
-      "command_endpoint": { "transport": "tcp", "host": "127.0.0.1", "port": 5770 }
-    },
-    "stream": { "mode": "OFF" }
+    "deployment_mode": "simulation",
+    "network": {
+      "telemetry_endpoint": { "transport": "serial", "port": "COM3", "baud": 57600 },
+      "companion_endpoint": { "transport": "tcp", "host": "127.0.0.1", "port": 5760 },
+      "command_endpoint": { "transport": "tcp", "host": "127.0.0.1", "port": 5770 },
+      "stream": { "mode": "OFF" }
+    }
   })";
   if (!WriteFile(path, content)) {
     return Expect(false, "Failed to write missing_field.json");
@@ -144,9 +165,9 @@ bool TestMissingField(const std::filesystem::path& temp_dir) {
 
   ulak::core::AppConfig config;
   const auto result = ulak::core::LoadConfigFile(path, &config);
-  return Expect(!result.ok, "Expected missing telemetry to fail") &&
+  return Expect(!result.ok, "Expected missing ros2 to fail") &&
          Expect(result.error == ulak::core::ConfigError::kMissingField,
-                "Expected kMissingField for missing telemetry");
+                "Expected kMissingField for missing ros2");
 }
 
 bool TestProfileSchemaFallback(const std::filesystem::path& temp_dir) {
