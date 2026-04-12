@@ -7,48 +7,63 @@ Define user-visible and protocol-level behavior of the Panic Button.
 ## 2. Fixed contract
 
 - Panic action is always `PANIC_RTL`.
-- Panic command category is `station/commands/request`.
-- Panic command mapping cannot be changed by profile, UI preferences, or runtime customization.
+- Panic is dispatched directly to the Pixhawk as a MAVLink command over UDP.
+- Panic does **not** use the JSON protocol envelope (`station/commands/request`).
+- Panic command behavior cannot be changed by profile, UI preferences, or runtime customization.
 
 ## 3. UX requirements
 
 - Panic control is always visible in main operator workflow.
 - Trigger uses a guard pattern (explicit confirmation or protected interaction).
-- After trigger, UI shows command lifecycle state: `SENT`, `ACK`, `REJECT`, `TIMEOUT`, `RESULT`.
+- After trigger, UI shows panic state: `SENT`, `CONFIRMED`, `FAILED`.
+  - `SENT`: MAVLink command has been dispatched.
+  - `CONFIRMED`: telemetry stream shows `vehicle_mode == "RTL"`.
+  - `FAILED`: confirmation window elapsed without `vehicle_mode` transitioning to `RTL`.
 
 ## 4. Dispatch behavior
 
-1. Generate fresh `correlation_id`.
-2. Emit `station/commands/request` with payload:
-```json
-{
-  "command": "PANIC_RTL",
-  "target": "flight_controller",
-  "params": {}
-}
+1. Operator triggers Panic Button (guard pattern satisfied).
+2. `PanicManager` dispatches MAVLink `COMMAND_LONG` directly to Pixhawk over UDP:
+
 ```
-3. Start lifecycle timers (`ACK_TIMEOUT`, `EXEC_TIMEOUT`) per protocol defaults or configured overrides.
+MAVLink COMMAND_LONG:
+  target_system:    <pixhawk sysid>
+  target_component: <pixhawk compid>
+  command:          MAV_CMD_NAV_RETURN_TO_LAUNCH (20)
+  confirmation:     0
+  param1..param7:   0
+```
+
+3. UI transitions to `SENT` state immediately.
+4. Station begins monitoring telemetry stream for `vehicle_mode == "RTL"`.
+5. When `vehicle_mode == "RTL"` is observed, UI transitions to `CONFIRMED`.
 
 ## 5. Failure behavior
 
-- If ACK is not received before `ACK_TIMEOUT`, create CRITICAL safety event and keep failure visible to operator.
-- If ACK is received but no terminal evidence appears before `EXEC_TIMEOUT`, create CRITICAL safety event.
-- Re-triggering panic is allowed only by explicit operator action.
+- If `vehicle_mode` does not transition to `RTL` within the confirmation window
+  (default: configurable, recommended 5s), station raises a `CRITICAL` safety event
+  and UI transitions to `FAILED`.
+- `FAILED` state must be persistent and unmissable in UI.
+- Re-triggering panic is allowed only by explicit operator action — no automatic background retry.
 
 ## 6. Audit requirements
 
-- Every panic trigger must produce an audit record including:
-  - operator identity/session id (if available),
-  - timestamp,
-  - correlation id,
-  - command lifecycle outcome.
+Every panic trigger must produce an audit record including:
+
+- operator session id (if available),
+- timestamp,
+- MAVLink command dispatched (`MAV_CMD_NAV_RETURN_TO_LAUNCH`),
+- confirmation outcome (`CONFIRMED` or `FAILED`),
+- time-to-confirmation or failure reason.
 
 ## 7. Verification checklist
 
 - Panic control available across all primary UI states.
-- Panic always dispatches `PANIC_RTL`.
+- Panic always dispatches `MAV_CMD_NAV_RETURN_TO_LAUNCH` to Pixhawk via MAVLink/UDP.
 - Panic cannot be remapped by profile edit attempts.
-- Timeout/reject paths produce CRITICAL visibility and audit logs.
+- Confirmation is derived from telemetry `vehicle_mode` field only.
+- Failure path produces `CRITICAL` visibility and audit log entry.
+- Re-trigger requires explicit operator action.
 
 ## References
 

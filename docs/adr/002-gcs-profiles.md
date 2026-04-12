@@ -1,12 +1,8 @@
 # ADR-002: GCS Profiles and Policy Mapping
 
-- Status: Accepted
-- Date: 2026-02-10
-- Owners: ULAK GCS maintainers
-
 ## Context
 
-The station must support both simulation and real vehicle operations without forking business logic. Teams need to tune safety behavior without recompiling the application. At the same time, core safety invariants (panic behavior, severity model) must remain stable.
+The station must support both simulation and real vehicle operations without forking business logic. Teams need to tune safety behavior without modifying application code. At the same time, core safety invariants (panic behavior, severity model) must remain stable.
 
 ## Decision
 
@@ -14,7 +10,7 @@ The station must support both simulation and real vehicle operations without for
 - Runtime behavior is controlled by profile data loaded from `config/profiles/*.json`.
 - Profile content maps `event_code -> severity -> action`.
 
-2. Severity model is fixed in MVP.
+2. Severity model is fixed in MVP.without
 - Allowed severity values are exactly `WARN`, `ERROR`, `CRITICAL`.
 - Profiles can map events to one of these levels, but cannot add new severity levels.
 

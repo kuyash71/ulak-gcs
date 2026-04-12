@@ -1,6 +1,6 @@
 # ULAK GCS — Architecture
 
-**Document purpose:** Define the architecture of the **ULAK GCS (Ground Control Station)** application:  
+**Document purpose:** Define the architecture of the **ULAK GCS (Ground Control Station)** application:
 modules, responsibilities, data flows, safety/observability principles, and extension points.
 
 This document is aligned with the broader SAÜRO UAV software designs, which emphasizes:
@@ -38,16 +38,16 @@ Those run on:
 
 ### 1.3 Deployment modes
 
-The station operates in one of two mutually exclusive deployment modes, selected via `deployment_mode` in `settings.json`. The mode determines which transport backend all adapters use at startup. The Application Core and UI are completely agnostic to the active mode.
+The station operates in one of two mutually exclusive deployment modes, selected via `deployment_mode` in `settings.json`. The mode determines which transport backend all components use at startup. The Application Core and UI are completely agnostic to the active mode.
 
 | Mode | `deployment_mode` | Transport Layer | Use Case |
 |------|-------------------|-----------------|----------|
 | **Simulation** | `"simulation"` | ROS2 (rosbridge WebSocket) | ArduPilot SITL + Gazebo, all data via ROS2 topics |
-| **Real Drone** | `"real"` | Network / Serial (raw) | Pixhawk MAVLink + Raspberry Pi over Wi-Fi, no ROS2 |
+| **Real Drone** | `"real"` | Network / UDP (raw) | Pixhawk MAVLink over WiFi telemetry + Raspberry Pi over Wi-Fi, no ROS2 |
 
 #### 1.3.1 Simulation mode
 
-In simulation mode **all data channels** (telemetry, mission state, perception, safety events, camera) are consumed via ROS2 topics through a rosbridge WebSocket connection. There is no direct serial or TCP data connection.
+In simulation mode **all data channels** (telemetry, mission state, perception, safety events, camera) are consumed via ROS2 topics through a rosbridge WebSocket connection. There is no direct serial or UDP data connection.
 
 ```
 [ArduPilot SITL + Gazebo] ──ROS2 topics──> [rosbridge WS] ──> [ULAK GCS]
@@ -56,41 +56,41 @@ In simulation mode **all data channels** (telemetry, mission state, perception, 
 - The rosbridge WebSocket endpoint is configured in `settings.json` under `ros2.bridge`.
 - Every data channel (telemetry, mission, perception, camera) maps to a named ROS2 topic configurable in `settings.json` under `ros2.topics`.
 - In Windows/WSL2 setups: SITL and rosbridge run inside WSL2. The `ros2.bridge.host` MUST be the WSL2 NIC IP (e.g. `172.x.x.x`), **not** `127.0.0.1`.
-- **ROS2 topic names are user-configurable.** The station UI exposes a topic mapping panel (simulation mode only) so operators can inspect and adjust topic names without editing JSON files.
+- **ROS2 topic names are user-configurable.** The station UI exposes a topic mapping panel (simulation mode only) so operators can inspect and adjust topic names without editing JSON files directly. Changes are written to `settings.json` and take effect after restart. A **"⚠ Restart required to apply changes"** banner is shown whenever unsaved or unapplied topic changes are present.
 
 #### 1.3.2 Real drone mode
 
-In real drone mode **all data channels** use direct network or serial connections. There is **no ROS2 dependency** — no rosbridge, no topic subscription.
+In real drone mode **all data channels** use direct network connections over Wi-Fi. There is **no ROS2 dependency** — no rosbridge, no topic subscription.
 
 ```
-[Pixhawk FC] ──serial/USB (MAVLink)──> [ULAK GCS]
+[Pixhawk FC] ──WiFi telemetry (MAVLink/UDP)──> [ULAK GCS]
 [Raspberry Pi CC] ──Wi-Fi TCP──> [ULAK GCS]
 [RPi camera] ──Wi-Fi H.264 stream──> [ULAK GCS]
 ```
 
-- **Telemetry**: MAVLink over serial (USB cable to Pixhawk). Port is `COMx` on Windows, `/dev/ttyUSBx` on Linux. Configured in `settings.json` under `network.telemetry_endpoint`.
+- **Telemetry**: MAVLink over UDP from Pixhawk via WiFi telemetry module. Endpoint configured in `settings.json` under `network.telemetry_endpoint`.
 - **Mission state / Perception / Safety events**: JSON over TCP from Raspberry Pi companion computer. Configured under `network.companion_endpoint`.
 - **Camera**: H.264 compressed stream from Raspberry Pi over Wi-Fi. Configured under `network.stream`.
 - **Commands**: JSON over TCP to Raspberry Pi (`network.command_endpoint`); MAVLink commands routed through FC for flight actions.
 
 ### 1.4 Transport abstraction principle
 
-Each adapter (Telemetry, Mission/Perception, Stream Manager, Command Gateway) exposes a **stable internal interface** to the Application Core. At startup, the `deployment_mode` value determines which backend implementation is instantiated behind that interface:
+Each component (Telemetry, Mission/Perception, Stream Manager, Command Gateway) exposes a **stable internal interface** to the Application Core. At startup, the `deployment_mode` value determines which backend implementation is instantiated:
 
 ```
 Application Core
       │
-      ├── TelemetryAdapter ──[simulation]──> ROS2Backend(ros2.topics.telemetry)
-      │                    ──[real]──────> MAVLinkSerialBackend(network.telemetry_endpoint)
+      ├── TelemetryComponent ──[simulation]──> ROS2Backend(ros2.topics.telemetry)
+      │                      ──[real]──────> MAVLinkUDPBackend(network.telemetry_endpoint)
       │
-      ├── MissionAdapter ───[simulation]──> ROS2Backend(ros2.topics.mission_state, ...)
-      │                    ──[real]──────> TcpJsonBackend(network.companion_endpoint)
+      ├── MissionComponent ───[simulation]──> ROS2Backend(ros2.topics.mission_state, ...)
+      │                      ──[real]──────> TcpJsonBackend(network.companion_endpoint)
       │
-      ├── StreamManager ───[simulation]──> ROS2Backend(ros2.topics.camera)
-      │                   ──[real]──────> H264TcpBackend(network.stream)
+      ├── StreamManager ──────[simulation]──> ROS2Backend(ros2.topics.camera)
+      │                      ──[real]──────> H264TcpBackend(network.stream)
       │
-      └── CommandGateway ──[simulation]──> ROS2Backend(ros2.topics.commands)
-                          ──[real]──────> TcpJsonBackend(network.command_endpoint)
+      └── CommandGateway ─────[simulation]──> ROS2Backend(ros2.topics.commands)
+                              ──[real]──────> TcpJsonBackend(network.command_endpoint)
 ```
 
 This ensures that swapping deployment modes requires **only a config change**, not code changes. Internal data models (`TelemetryFrame`, `MissionState`, `PerceptionTarget`, etc.) are identical in both modes.
@@ -112,8 +112,8 @@ flowchart LR
     LOG[Logger & Recorder]
     CFG[Config Manager]
 
-    TEL[Telemetry Adapter]
-    MIF[Mission/Perception Adapter]
+    TEL[Telemetry Component]
+    MIF[Mission/Perception Component]
     STR[Stream Manager]
     CMD[Command Gateway]
     SAFE["Safety Layer (UI + Constraints)"]
@@ -150,13 +150,12 @@ flowchart LR
 
   CMD --> FC
   CMD --> CC
-
 ```
 
 ### 2.2 Architectural principles
 
 1. **UI ≠ IO**: UI thread must remain responsive; IO/decoding runs in worker threads.
-2. **Clear contracts**: Use interfaces for each external stream (telemetry, mission/perception, stream).
+2. **Clear contracts**: Use stable internal interfaces for each external stream (telemetry, mission/perception, stream).
 3. **Single source of truth**: Application Core aggregates all external inputs into a unified state.
 4. **Safety first**: Commands are gated by constraints and explicit operator confirmation where appropriate.
 5. **Traceability**: Everything important becomes an event (loggable, replayable).
@@ -171,10 +170,10 @@ flowchart LR
   - telemetry dashboard,
   - mission state view (FSM),
   - perception outputs (targets/alignment/confidence),
-  - streaming view (if enabled),
+  - streaming view + Polisher panel (if camera mode enabled),
   - safety events/timeline,
-  - **ROS2 topic mapping panel** (visible in `simulation` mode only): lists all configured topic names, allows the operator to inspect and edit them without touching JSON files.
-- Provides operator actions: connect/disconnect, start/stop mission, parameter override, safe termination (e.g., abort / RTL via Panic Button).
+  - **ROS2 topic mapping panel** (visible in `simulation` mode only): lists all configured topic names, allows the operator to inspect and edit them. Changes are written to `settings.json`. A **"⚠ Restart required to apply changes"** banner is displayed whenever unapplied changes are present. Changes take effect only after restart.
+- Provides operator actions: connect/disconnect, start/stop mission, parameter override, safe termination (Panic Button → RTL).
 
 ### 3.2 Application Core
 
@@ -187,16 +186,16 @@ flowchart LR
 - Converts raw payloads into typed models for the UI.
 - Coordinates reconnection policies and backoff (where relevant).
 
-### 3.3 Telemetry Adapter
+### 3.3 Telemetry Component
 
 Exposes a single `TelemetryFrame` stream to the Application Core. Backend is selected by `deployment_mode`:
 
-- **simulation**: subscribes to `ros2.topics.telemetry` (e.g. `/mavros/local_position/pose`) and `ros2.topics.vehicle_state` via rosbridge.
-- **real**: connects to Pixhawk via MAVLink serial (`network.telemetry_endpoint`). Port is `COMx` on Windows, `/dev/ttyUSBx` on Linux.
+- **simulation**: subscribes to `ros2.topics.telemetry` and `ros2.topics.vehicle_state` via rosbridge WebSocket.
+- **real**: connects to Pixhawk via MAVLink over UDP through WiFi telemetry module (`network.telemetry_endpoint`).
 
 In both cases, raw data is normalized into the internal `TelemetryFrame` model before being published.
 
-### 3.4 Mission/Perception Adapter
+### 3.4 Mission/Perception Component
 
 Exposes typed `MissionState`, `PerceptionTarget`, and `SafetyEvent` streams. Backend selected by `deployment_mode`:
 
@@ -217,6 +216,8 @@ Delivers camera frames to the UI layer. Backend is selected by `deployment_mode`
   - **RAW_DEBUG**: uncompressed frames for lab use
 
 In both modes, the Stream Manager exposes a frame queue to the UI with a drop strategy under load. The UI must never block on frame delivery.
+
+When camera mode is active, the **Polisher panel** becomes accessible. See `docs/spec/polisher.md` for the full Polisher specification.
 
 ### 3.6 Command Gateway
 
@@ -251,25 +252,25 @@ Command Gateway responsibilities:
 
 **Simulation:**
 1. SITL publishes pose/state to ROS2 topics.
-2. Telemetry Adapter (ROS2 backend) receives frames via rosbridge.
+2. Telemetry Component (ROS2 backend) receives frames via rosbridge.
 3. Frames normalized to `TelemetryFrame` → `TelemetryUpdate` event published.
 4. Application Core updates unified state; UI renders.
 
 **Real drone:**
-1. Pixhawk sends MAVLink frames over serial/USB.
-2. Telemetry Adapter (MAVLink backend) parses frames.
+1. Pixhawk sends MAVLink frames over UDP via WiFi telemetry module.
+2. Telemetry Component (MAVLink/UDP backend) parses frames.
 3. Same `TelemetryFrame` normalization → same event path.
 
 ### 4.2 Mission & perception flow
 
 **Simulation:**
 1. Companion sim publishes to ROS2 topics (`/mission/state`, `/perception/output`, `/safety/events`).
-2. Mission/Perception Adapter (ROS2 backend) receives via rosbridge.
+2. Mission/Perception Component (ROS2 backend) receives via rosbridge.
 3. Normalized events published to Event Bus.
 
 **Real drone:**
 1. Raspberry Pi sends JSON payloads over TCP.
-2. Mission/Perception Adapter (TCP backend) parses and normalizes.
+2. Mission/Perception Component (TCP backend) parses and normalizes.
 3. Same event path to Application Core, UI, Logger.
 
 ### 4.3 Camera/stream flow
@@ -328,17 +329,15 @@ The design includes a safety monitor that publishes safety events to multiple co
 Safety events are classified into three severity levels:
 
 - **WARN**: Non-blocking issues that do not directly affect flight safety.
-- **ERROR**: Blocking or potentially dangerous conditions that may require operator
-  confirmation or timed intervention.
+- **ERROR**: Blocking or potentially dangerous conditions that may require operator confirmation or timed intervention.
 - **CRITICAL**: Immediate safety threats requiring automatic action.
 
 ### 6.2 Station-side constraints
 
-Even if other components also validate commands, the station must gate obvious unsafe actions:
-This guarantees a deterministic and reviewable last-resort behavior across all deployments.
+Even if other components also validate commands, the station must gate obvious unsafe actions. This guarantees a deterministic and reviewable last-resort behavior across all deployments.
 
 - require explicit confirmation for mission termination commands,
-- prevent contradictory commands during critical phases (e.g., disallow “start mission” when not connected),
+- prevent contradictory commands during critical phases (e.g., disallow "start mission" when not connected),
 - throttle repeated commands.
 
 #### 6.2.a Panic Button
@@ -347,6 +346,7 @@ The station provides a global **Panic Button** that is always accessible to the 
 
 - The Panic Button action is **fixed to RTL (Return-To-Launch)**.
 - This behavior is independent of profiles and cannot be overridden via customization.
+- The command is fire-and-forget; delivery confirmation comes from the telemetry stream — when flight mode transitions to `RTL`, the command is confirmed.
 - Panic is designed as a last-resort, deterministic safety action.
 
 ### 6.3 Failsafe observability
@@ -357,7 +357,7 @@ When failsafe triggers, the station should make it unmissable:
 - highlighted timeline entry,
 - recommended operator action message.
 
-## 6.4 Policy & Behavior Model
+### 6.4 Policy & Behavior Model
 
 The station follows a **policy-first behavior model**.
 
@@ -446,7 +446,8 @@ Planned/expected extension points:
 - new telemetry sources (e.g., different FC link transports),
 - multi-vehicle session support,
 - replay mode (logs + recorded stream),
-- new panels: checklists, map overlays, payload control UI.
+- new panels: checklists, map overlays, payload control UI,
+- Lua plugin system (WIP).
 
 ---
 

@@ -14,9 +14,11 @@ Define what can be customized and what is intentionally fixed in ULAK GCS MVP.
 
 ## 3. Non-customizable safety invariants
 
-- Panic behavior is fixed to `PANIC_RTL`
+- Panic behavior is fixed to `PANIC_RTL` (dispatched as MAVLink `MAV_CMD_NAV_RETURN_TO_LAUNCH`
+  directly to Pixhawk — not subject to JSON command lifecycle)
 - Severity model is fixed to `WARN`, `ERROR`, `CRITICAL`
 - Command lifecycle semantics remain protocol-defined (`ACK`, `REJECT`, `TIMEOUT`)
+  for all JSON commands sent to the Companion Computer
 - Critical audit chain requirements cannot be disabled
 
 ## 4. Extension model

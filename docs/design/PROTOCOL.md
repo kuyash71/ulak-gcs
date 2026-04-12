@@ -5,31 +5,54 @@
 This document defines the MVP message protocol contract between:
 
 - ULAK GCS Station (operator app),
-- Flight Controller (FC),
-- Companion Computer (CC).
+- Flight Controller / FC (Pixhawk / ArduPilot),
+- Companion Computer / CC (Raspberry Pi 4B).
 
-It is the wire-level contract for message categories, envelope fields, command lifecycle semantics, error handling, and retry/idempotency behavior.
+It is the wire-level contract for message categories, envelope fields, command routing,
+command lifecycle semantics, error handling, and retry/idempotency behavior.
 
 ## 2. Scope and assumptions
 
 - Transport is deployment-specific (see Section 2.1). The payload contract remains the same.
-- Message format is JSON (UTF-8).
+- Message format is JSON (UTF-8), except for MAVLink channels which use the MAVLink binary protocol.
 - Timestamp format is RFC3339 UTC (example: `2026-02-10T18:45:30Z`).
 - The architecture is hybrid:
   - FC is the primary telemetry source.
   - CC is the mission/perception/stream/safety source.
   - Station is the command originator and visibility surface.
 - Telemetry payloads use a shared XYZ-based base schema for both vehicle and simulator feeds.
-- For `vehicle` telemetry, geodetic fields (`lat_deg`, `lon_deg`, `alt_m`) are optional extensions and not the canonical position contract.
-- For simulation telemetry, a configurable coordinate transformer is required because Gazebo and ArduPilot local XYZ conventions are not identical.
+- For `vehicle` telemetry, geodetic fields (`lat_deg`, `lon_deg`, `alt_m`) are optional extensions
+  and not the canonical position contract.
+- For simulation telemetry, a configurable coordinate transformer is required because Gazebo and
+  ArduPilot local XYZ conventions are not identical.
 
-### 2.1 Deployment modes and transport selection
+### 2.1 Command routing
 
-The station operates in one of two modes set by `deployment_mode` in `settings.json`. The mode determines the transport for **all** data channels. The JSON protocol described in this document applies to the `real` mode only. In `simulation` mode, ROS2 message types replace the JSON envelope (see Section 11).
+GCS command responsibility is minimal and explicit:
+
+| Command | Target | Transport |
+|---------|--------|-----------|
+| `PANIC_RTL` | Pixhawk (FC) | MAVLink/UDP — `MAV_CMD_NAV_RETURN_TO_LAUNCH` (cmd 20) |
+| `START_MISSION` | Raspberry Pi (CC) | TCP JSON |
+| `STOP_MISSION` | Raspberry Pi (CC) | TCP JSON |
+| `SET_PARAM` | Raspberry Pi (CC) | TCP JSON |
+| `SET_SIMULATOR_COORD_TRANSFORM` | Raspberry Pi (CC) | TCP JSON (simulation mode only) |
+
+Pi–Pixhawk communication is fully independent of GCS. The GCS does not participate in,
+observe, or control the Pi–Pixhawk link. The GCS only sends `PANIC_RTL` directly to the
+Pixhawk via MAVLink.
+
+### 2.2 Deployment modes and transport selection
+
+The station operates in one of two modes set by `deployment_mode` in `settings.json`.
+The mode determines the transport for **all** data channels.
+The JSON protocol described in this document applies to the `real` mode only.
+In `simulation` mode, ROS2 message types replace the JSON envelope (see Section 11).
 
 #### Mode: `simulation`
 
-All data flows via ROS2 topics through a rosbridge WebSocket connection. There is no direct serial or TCP connection to any component.
+All data flows via ROS2 topics through a rosbridge WebSocket connection.
+There is no direct UDP or TCP connection to any component.
 
 | Channel | Transport | Config key |
 |---------|-----------|------------|
@@ -41,22 +64,24 @@ All data flows via ROS2 topics through a rosbridge WebSocket connection. There i
 | Camera | ROS2 topic | `ros2.topics.camera` |
 | Commands | ROS2 topic | `ros2.topics.commands` |
 
-rosbridge endpoint: `ros2.bridge.host` + `ros2.bridge.port`. On Windows/WSL2 the host MUST be the WSL2 NIC IP.
+rosbridge endpoint: `ros2.bridge.host` + `ros2.bridge.port`.
+On Windows/WSL2 the host MUST be the WSL2 NIC IP (e.g. `172.x.x.x`), not `127.0.0.1`.
 
 #### Mode: `real`
 
-All data flows over direct network or serial connections. No ROS2 dependency.
+All data flows over direct network connections over Wi-Fi. No ROS2 dependency.
 
 | Channel | Transport | Config key |
 |---------|-----------|------------|
-| Telemetry (FC) | MAVLink serial | `network.telemetry_endpoint` |
-| Mission / Perception / Safety | TCP JSON | `network.companion_endpoint` |
-| Commands | TCP JSON | `network.command_endpoint` |
+| Telemetry (FC) | MAVLink / UDP via WiFi telemetry module | `network.telemetry_endpoint` |
+| Mission / Perception / Safety (CC) | TCP JSON | `network.companion_endpoint` |
+| Commands to CC | TCP JSON | `network.command_endpoint` |
+| Commands to FC (`PANIC_RTL` only) | MAVLink / UDP | `network.telemetry_endpoint` (same link) |
 | Camera stream | H.264 TCP/UDP | `network.stream` |
 
 ## 3. Protocol versioning
 
-- `schema_version` MUST be present in every message.
+- `schema_version` MUST be present in every JSON message.
 - MVP baseline version is `1.0.0`.
 - Major version mismatch (`1.x.x` vs `2.x.x`) MUST be rejected.
 - Minor/patch additions MAY be accepted only if unknown fields are safely ignored.
@@ -82,11 +107,11 @@ Recommended concrete category values:
 - `station/commands/request`
 - `station/commands/ack`
 - `station/commands/reject`
-- `station/commands/result` (optional but recommended)
+- `station/commands/result` (post-MVP, optional)
 
 ## 5. Common envelope (required fields)
 
-Every protocol message MUST follow this envelope:
+Every JSON protocol message MUST follow this envelope:
 
 ```json
 {
@@ -110,22 +135,23 @@ Required fields:
 
 Validation rules:
 
-- Missing required fields -> reject as `INVALID_SCHEMA`.
-- Invalid timestamp format -> reject as `INVALID_SCHEMA`.
-- Unknown category -> reject as `UNKNOWN_CATEGORY`.
+- Missing required fields → reject as `INVALID_SCHEMA`.
+- Invalid timestamp format → reject as `INVALID_SCHEMA`.
+- Unknown category → reject as `UNKNOWN_CATEGORY`.
 
 ## 6. Minimal payload contracts
 
 ### 6.1 `telemetry/*` (base schema + derived variants)
 
-#### 6.1.1 Base telemetry schema (logical parent)
+#### 6.1.1 Base telemetry schema
 
 All telemetry messages (`telemetry/vehicle` and `telemetry/simulator`) MUST include this base payload shape.
 
-Naming contract for sustainability:
+Naming contract:
 
-- `telemetry/vehicle`: normalized vehicle state from the active flight stack (real airframe, SITL, or HIL).
-- `telemetry/simulator`: simulator-oriented telemetry stream that carries transform context for world/frame reconciliation.
+- `telemetry/vehicle`: normalized vehicle state from the active flight stack.
+- `telemetry/simulator`: simulator-oriented telemetry stream that carries transform context
+  for world/frame reconciliation.
 
 ```json
 {
@@ -146,6 +172,10 @@ Required base fields:
 - `position_m`: XYZ position in meters (`x`, `y`, `z`)
 - `velocity_mps`: XYZ velocity in m/s (`x`, `y`, `z`)
 - `attitude_deg`: Euler attitude in degrees
+- `vehicle_mode`: active flight mode string (e.g. `GUIDED`, `RTL`, `LOITER`)
+
+`vehicle_mode` is the primary mechanism for confirming `PANIC_RTL` delivery —
+when this field transitions to `RTL`, the command is considered confirmed.
 
 #### 6.1.2 `telemetry/vehicle` (derived)
 
@@ -168,7 +198,7 @@ Real vehicle payloads extend the base schema and MAY include geodetic coordinate
 }
 ```
 
-`geodetic` is optional for protocol compatibility and mapping use-cases, but station-side motion/state logic should be based on base XYZ fields.
+`geodetic` is optional. Station-side state logic must be based on base XYZ fields.
 
 #### 6.1.3 `telemetry/simulator` (derived)
 
@@ -190,7 +220,8 @@ Simulation payloads extend the base schema and include raw source frame informat
 
 #### 6.1.4 Simulation coordinate transformer (configurable)
 
-The simulation adapter MUST support a configurable frame transformer to align Gazebo XYZ with ArduPilot local XYZ expectations.
+The simulation component MUST support a configurable frame transformer to align
+Gazebo XYZ with ArduPilot local XYZ expectations.
 
 Recommended transform config payload:
 
@@ -209,8 +240,9 @@ Recommended transform config payload:
 
 Rules:
 
-- Transformation is applied to raw simulation telemetry before publishing `position_m` and `velocity_mps`.
-- Active transform config should be loaded from station simulation settings and be overrideable at runtime.
+- Transformation is applied to raw simulation telemetry before publishing `position_m`
+  and `velocity_mps`.
+- Active transform config is loaded from station simulation settings.
 - Runtime transform updates MUST be audit-logged.
 
 ### 6.2 `mission/state`
@@ -244,11 +276,7 @@ Rules:
 }
 ```
 
-`severity` values for MVP:
-
-- `WARN`
-- `ERROR`
-- `CRITICAL`
+`severity` values for MVP: `WARN`, `ERROR`, `CRITICAL`.
 
 ### 6.5 `station/commands/request`
 
@@ -262,17 +290,24 @@ Rules:
 }
 ```
 
-Command names (MVP set):
+Command routing table (MVP):
 
-- `START_MISSION`
-- `STOP_MISSION`
-- `SET_PARAM`
-- `SET_SIMULATOR_COORD_TRANSFORM`
-- `PANIC_RTL`
+| Command | `target` value | Transport |
+|---------|---------------|-----------|
+| `START_MISSION` | `companion_computer` | TCP JSON |
+| `STOP_MISSION` | `companion_computer` | TCP JSON |
+| `SET_PARAM` | `companion_computer` | TCP JSON |
+| `SET_SIMULATOR_COORD_TRANSFORM` | `companion_computer` | TCP JSON (sim only) |
+| `PANIC_RTL` | `flight_controller` | MAVLink `MAV_CMD_NAV_RETURN_TO_LAUNCH` (cmd 20) |
 
-`PANIC_RTL` is fixed behavior and MUST map to RTL action regardless of profile.
+`PANIC_RTL` is fixed behavior and MUST map to RTL action regardless of active profile.
+It bypasses the JSON envelope entirely and is sent as a raw MAVLink command directly
+to the Pixhawk over UDP.
 
-## 7. Command lifecycle semantics (ACK/REJECT/TIMEOUT)
+## 7. Command lifecycle semantics (ACK / REJECT / TIMEOUT)
+
+This section applies to **JSON commands sent to the Companion Computer** only.
+`PANIC_RTL` is fire-and-forget over MAVLink — see Section 7.5.
 
 ### 7.1 Request
 
@@ -291,20 +326,16 @@ ACK means:
 
 ACK does NOT mean command completed successfully.
 
-ACK payload:
-
 ```json
 {
   "status": "ACK",
-  "accepted_by": "flight_controller"
+  "accepted_by": "companion_computer"
 }
 ```
 
 ### 7.3 REJECT
 
 Receiver sends `station/commands/reject` when request cannot be accepted.
-
-REJECT payload:
 
 ```json
 {
@@ -318,7 +349,7 @@ REJECT payload:
 
 Two timeout classes exist:
 
-- `ACK_TIMEOUT`: no ACK or REJECT received in `T_ack`.
+- `ACK_TIMEOUT`: no ACK or REJECT received within `T_ack`.
 - `EXEC_TIMEOUT`: ACK received, but no completion evidence by `T_exec`.
 
 MVP default timers:
@@ -326,12 +357,21 @@ MVP default timers:
 - `T_ack = 2s`
 - `T_exec = 10s` (command-specific overrides allowed)
 
-Completion evidence:
+Completion evidence (MVP): deterministic state or event transition proving execution
+(e.g., mission enters expected FSM state after `START_MISSION`).
 
-- `station/commands/result` with `SUCCESS` or `FAILED`, or
-- deterministic state/event transition proving completion (example: mission enters expected state).
+`station/commands/result` is a post-MVP addition. When implemented, it provides
+explicit SUCCESS/FAILED completion signaling and structured logging.
 
-ACK without completion evidence MUST NOT be treated as completion.
+### 7.5 `PANIC_RTL` lifecycle
+
+`PANIC_RTL` does not follow the ACK/REJECT/TIMEOUT lifecycle.
+
+- Sent directly to Pixhawk as MAVLink `MAV_CMD_NAV_RETURN_TO_LAUNCH` (cmd 20) over UDP.
+- Fire-and-forget: no ACK is expected from Pixhawk at the protocol level.
+- Confirmation is implicit: when `vehicle_mode` in the telemetry stream transitions
+  to `RTL`, the command is considered delivered and active.
+- No automatic background retry. Re-sending `PANIC_RTL` requires explicit operator action.
 
 ## 8. Error codes
 
@@ -356,8 +396,10 @@ Mandatory error codes for MVP:
 Idempotency:
 
 - `correlation_id` is the idempotency key for command requests.
-- Receiver MUST deduplicate repeated requests with the same `correlation_id` for a minimum 60s window.
-- For duplicates, receiver MUST return the same terminal response (`ACK`, `REJECT`, or `result`) when available.
+- Receiver MUST deduplicate repeated requests with the same `correlation_id`
+  for a minimum 60s window.
+- For duplicates, receiver MUST return the same terminal response (`ACK`, `REJECT`,
+  or `result`) when available.
 
 Retry policy:
 
@@ -375,11 +417,12 @@ Retry policy:
   - `SAFETY_CONSTRAINT`
   - `AUTHORIZATION_FAILED`
   - `RATE_LIMITED`
-- `PANIC_RTL` can be retried only by explicit operator action (no silent background retry).
+- `PANIC_RTL` is not subject to this retry policy. Re-sending requires explicit
+  operator action only.
 
-## 10. Example command flow
+## 10. Example message flows
 
-### 10.1 Request
+### 10.1 START_MISSION request
 
 ```json
 {
@@ -389,9 +432,9 @@ Retry policy:
   "source": "station",
   "correlation_id": "2cf42dca-d8a2-46d2-bdfd-677ee6a66e8f",
   "payload": {
-    "command": "STOP_MISSION",
+    "command": "START_MISSION",
     "target": "companion_computer",
-    "params": {}
+    "params": { "mission_id": "mission_1" }
   }
 }
 ```
@@ -412,22 +455,39 @@ Retry policy:
 }
 ```
 
-### 10.3 Result (optional recommended pattern)
+### 10.3 STOP_MISSION request
 
 ```json
 {
   "schema_version": "1.0.0",
-  "category": "station/commands/result",
-  "timestamp": "2026-02-10T19:00:01Z",
-  "source": "companion_computer",
-  "correlation_id": "2cf42dca-d8a2-46d2-bdfd-677ee6a66e8f",
+  "category": "station/commands/request",
+  "timestamp": "2026-02-10T19:01:00Z",
+  "source": "station",
+  "correlation_id": "9a3f1bcd-0011-4e22-a987-aabbccddeeff",
   "payload": {
-    "status": "SUCCESS"
+    "command": "STOP_MISSION",
+    "target": "companion_computer",
+    "params": {}
   }
 }
 ```
 
-### 10.4 `telemetry/simulator` example
+### 10.4 PANIC_RTL (MAVLink — no JSON envelope)
+
+`PANIC_RTL` bypasses the JSON protocol entirely.
+
+```
+MAVLink COMMAND_LONG:
+  target_system:    <pixhawk sysid>
+  target_component: <pixhawk compid>
+  command:          MAV_CMD_NAV_RETURN_TO_LAUNCH (20)
+  confirmation:     0
+  param1..param7:   0
+```
+
+Confirmation is observed via telemetry: `vehicle_mode == "RTL"`.
+
+### 10.5 telemetry/simulator example
 
 ```json
 {
@@ -450,7 +510,7 @@ Retry policy:
 }
 ```
 
-### 10.5 Runtime transform update command example
+### 10.6 Runtime transform update command
 
 ```json
 {
@@ -479,7 +539,10 @@ Retry policy:
 
 ## 11. Simulation mode — ROS2 transport
 
-When `deployment_mode` is `"simulation"`, this JSON protocol does **not** apply to incoming data. Instead, all adapters connect to rosbridge (rosbridge_suite WebSocket server) and subscribe to ROS2 topics. The JSON envelope defined in Sections 3–10 is used only for outgoing commands on the `ros2.topics.commands` topic.
+When `deployment_mode` is `"simulation"`, this JSON protocol does **not** apply to
+incoming data. All components connect to rosbridge (rosbridge_suite WebSocket server)
+and subscribe to ROS2 topics. The JSON envelope defined in Sections 3–10 is used only
+for outgoing commands on the `ros2.topics.commands` topic.
 
 ### 11.1 rosbridge connection
 
@@ -497,7 +560,11 @@ When `deployment_mode` is `"simulation"`, this JSON protocol does **not** apply 
 
 ### 11.2 Topic mapping
 
-All topic names are user-configurable in `settings.json` under `ros2.topics`. The station UI exposes a topic mapping panel in simulation mode for inspecting and editing them at runtime.
+All topic names are user-configurable in `settings.json` under `ros2.topics`.
+The station UI exposes a topic mapping panel in simulation mode for inspecting and
+editing topic names. Changes are written to `settings.json` and take effect after
+application restart. A **"⚠ Restart required to apply changes"** banner is shown
+whenever unapplied topic changes are present.
 
 Default topic mapping:
 
@@ -513,7 +580,7 @@ Default topic mapping:
 
 ### 11.3 Data normalization
 
-Each adapter is responsible for converting ROS2 message types into internal models:
+Each component is responsible for converting ROS2 message types into internal models:
 
 - `geometry_msgs/PoseStamped` → `TelemetryFrame`
 - `mavros_msgs/State` → vehicle mode / arm fields of `TelemetryFrame`
@@ -524,8 +591,11 @@ The Application Core and UI receive the same internal model regardless of deploy
 
 ### 11.4 Coordinate transform
 
-In simulation mode the coordinate transform (`simulation.coordinate_transform`) MUST be enabled to align Gazebo world coordinates with the ArduPilot LOCAL_NED frame before populating `TelemetryFrame.position_m`.
+In simulation mode the coordinate transform (`simulation.coordinate_transform`) MUST be
+enabled to align Gazebo world coordinates with the ArduPilot LOCAL_NED frame before
+populating `TelemetryFrame.position_m`.
 
 ---
 
-This contract is the MVP baseline. Future versions can extend payload fields and categories without breaking envelope invariants.
+This contract is the MVP baseline. Future versions can extend payload fields and
+categories without breaking envelope invariants.
